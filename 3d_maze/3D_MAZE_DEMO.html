@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>復古網格迷宮</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box !important;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #0b132b;
+            color: #f8fafc;
+            font-family: monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* min-height: 100vh; */
+            padding: 12px;
+            overflow: hidden;
+        }
+
+        .game-container {
+            width: 100%;
+            max-width: 820px;
+            background-color: #1c2541;
+            border: 3px solid #475569;
+            border-radius: 12px;
+            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.8);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+        }
+
+        header {
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-weight: bold;
+            font-size: 16px;
+            color: #38bdf8;
+        }
+
+        /* 主選單畫面 */
+        #menu-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            gap: 20px;
+        }
+        #menu-screen h1 { color: #fbbf24; font-size: 24px; letter-spacing: 2px; }
+        .btn-group { display: flex; gap: 15px; margin-top: 10px; }
+        .retro-btn {
+            background: #334155;
+            color: #fff;
+            border: 2px solid #64748b;
+            padding: 10px 20px;
+            font-family: monospace;
+            font-size: 15px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: 0.1s;
+        }
+        .retro-btn:hover { background: #475569; border-color: #38bdf8; color: #38bdf8; }
+        .retro-btn:active { transform: translateY(2px); }
+
+        /* 遊戲主畫面容器 */
+        #game-screen {
+            display: none;
+            position: relative;
+            width: 100%;
+            height: 440px;
+            background: #000;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* 3D 畫布視圖 */
+        #mazeCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #030712;
+        }
+
+        /* 右上角 7x7 2D 小地圖 */
+        #minimap {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #38bdf8;
+            display: grid;
+            grid-template-columns: repeat(7, 11px);
+            grid-template-rows: repeat(7, 11px);
+            gap: 1px;
+            padding: 2px;
+            border-radius: 4px;
+            z-index: 10;
+        }
+        .map-cell {
+            width: 11px;
+            height: 11px;
+            background: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 7px;
+            font-weight: bold;
+            position: relative;
+        }
+        .map-cell.wall { background: #475569; }
+        .map-cell.floor { background: #1e293b; }
+        .map-cell.goal { background: #22c55e; color: #fff; }
+
+        /* 玩家三角形指標 (CSS 繪製) */
+        .player-arrow {
+            width: 0;
+            height: 0;
+            border-left: 3px solid transparent;
+            border-right: 3px solid transparent;
+            border-bottom: 6px solid #e74c3c;
+            position: absolute;
+            transition: transform 0.1s;
+        }
+        /* 旋轉方向對應 */
+        .dir-0 { transform: rotate(0deg); }   /* 北 */
+        .dir-1 { transform: rotate(90deg); }  /* 東 */
+        .dir-2 { transform: rotate(180deg); } /* 南 */
+        .dir-3 { transform: rotate(270deg); } /* 西 */
+
+        /* 畫面下方控制按鈕列 */
+        .controls-bar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            background-color: #0d1527;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+        .ctrl-btn {
+            background: #1e293b;
+            color: #f8fafc;
+            border: 2px solid #64748b;
+            padding: 8px 16px;
+            font-family: monospace;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: 0.1s;
+        }
+        .ctrl-btn:hover { background: #334155; border-color: #38bdf8; color: #38bdf8; }
+        .ctrl-btn:active { transform: translateY(2px); }
+        .ctrl-btn.quit { border-color: #dc2626; color: #fca5a5; }
+        .ctrl-btn.quit:hover { background: #7f1d1d; color: #fff; }
+
+        /* 選單鍵盤選取 */
+        .retro-btn.selected { background: #475569; border-color: #38bdf8; color: #38bdf8; }
+        .side-btns { display: flex; flex-direction: column; gap: 8px; }
+
+        /* 選單：材質選擇 */
+        .theme-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: #94a3b8; }
+        .theme-row label { display: flex; align-items: center; gap: 6px; }
+        .theme-row select {
+            background: #1e293b; color: #f8fafc; border: 2px solid #64748b; border-radius: 6px;
+            padding: 4px 6px; font-family: monospace; font-size: 13px; cursor: pointer;
+        }
+        .theme-row select:hover { border-color: #38bdf8; }
+
+        /* 畫面上方提示訊息 */
+        #toast {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #e0f2fe;
+            padding: 6px 16px; border-radius: 8px; font-size: 15px; font-weight: bold;
+            z-index: 20; pointer-events: none; white-space: nowrap;
+            opacity: 0; transition: opacity 0.25s;
+        }
+        #toast.show { opacity: 1; }
+        #toast.danger { border-color: #ef4444; color: #fecaca; }
+        #toast.ok { border-color: #facc15; color: #fef08a; }
+
+        /* 祭壇／怪物在地圖上的顯示 */
+        .map-cell.altar { background: #78716c; color: #f5f5f4; }
+        .map-cell.altar.lit { background: #facc15; color: #422006; }
+        .view-cell.altar { background: #a8a29e; }
+        .view-cell.altar.lit { background: #facc15; }
+        .full-cell.altar { background: #a8a29e; }
+        .full-cell.altar.lit { background: #facc15; }
+        .full-cell.monster { background: #ef4444; }
+
+        /* 已走過地圖檢視 */
+        #view-map-grid {
+            display: grid;
+            gap: 1px;
+            background: #0f172a;
+            border: 2px solid #64748b;
+            padding: 4px;
+            border-radius: 6px;
+            justify-self: center;
+        }
+        .view-cell {
+            background: #0f172a;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            overflow: hidden;
+        }
+        .view-cell.wall { background: #475569; }
+        .view-cell.floor { background: #1e293b; }
+        .view-cell.trail { background: #0ea5e9; }
+        .view-cell.start { background: #fbbf24; }
+        .view-cell.goal { background: #22c55e; }
+        .view-cell.player { background: #e74c3c; }
+
+        /* 十字方向鍵 */
+        .controls-bar { align-items: center; gap: 24px; }
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 96px);
+            grid-template-rows: repeat(3, 40px);
+            gap: 6px;
+        }
+        .dpad .ctrl-btn { justify-content: center; padding: 0; }
+        .pad-up    { grid-column: 2; grid-row: 1; }
+        .pad-left  { grid-column: 1; grid-row: 2; }
+        .pad-right { grid-column: 3; grid-row: 2; }
+        .pad-down  { grid-column: 2; grid-row: 3; }
+
+        /* 彈窗畫面 */
+        .modal-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 19, 43, 0.92);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border-radius: 8px;
+        }
+        .modal-card {
+            background: #1c2541;
+            border: 2px solid #38bdf8;
+            border-radius: 10px;
+            padding: 24px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-card h3 { color: #fbbf24; font-size: 18px; }
+
+        /* 最終 2D 全景復盤畫面 */
+        #summary-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            gap: 10px;
+        }
+        #full-map-grid {
+            display: grid;
+            gap: 1px;
+            background: #334155;
+            border: 2px solid #64748b;
+            padding: 4px;
+            max-height: 320px;
+            overflow: auto;
+            border-radius: 6px;
+        }
+        .full-cell {
+            width: 14px;
+            height: 14px;
+            background: #0f172a;
+        }
+        .full-cell.wall { background: #475569; }
+        .full-cell.floor { background: #1e293b; }
+        .full-cell.trail { background: #0ea5e9; }
+        .full-cell.start { background: #fbbf24; }
+        .full-cell.goal { background: #22c55e; }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <header>
+        <div class="title">復古網格迷宮</div>
+        <div style="font-size: 13px; color: #94a3b8;" id="status-info">請選擇大小</div>
+    </header>
+
+    <!-- 主選單 -->
+    <div id="menu-screen">
+        <h1>迷宮探險選單</h1>
+        <p style="color: #94a3b8; font-size: 14px;">請選擇迷宮尺寸大小：</p>
+        <div class="btn-group">
+            <button class="retro-btn menu-btn" onmouseenter="selectMenu(0)" onclick="startGame(10)">10 x 10</button>
+            <button class="retro-btn menu-btn" onmouseenter="selectMenu(1)" onclick="startGame(20)">20 x 20</button>
+            <button class="retro-btn menu-btn" onmouseenter="selectMenu(2)" onclick="startGame(30)">30 x 30</button>
+        </div>
+        <p style="color: #64748b; font-size: 12px;">← → 選擇，Enter 確認</p>
+        <div class="theme-row" style="margin-top: 6px;">
+            <label>怪物數量 <select id="sel-monsters"></select></label>
+            <label>祭壇數量 <select id="sel-altars"></select></label>
+            <label>怪物移動間隔 <select id="sel-speed">
+                <option value="1">1 秒</option>
+                <option value="2">2 秒</option>
+                <option value="3">3 秒</option>
+                <option value="4">4 秒</option>
+                <option value="5">5 秒</option>
+            </select></label>
+        </div>
+        <p style="color: #64748b; font-size: 12px;">點亮所有祭壇後，才能從出口離開迷宮</p>
+        <p style="color: #94a3b8; font-size: 14px; margin-top: 10px;">迷宮材質：</p>
+        <div class="theme-row">
+            <label>牆壁 <select id="sel-wall"></select></label>
+            <label>地板 <select id="sel-floor"></select></label>
+            <label>天花板 <select id="sel-ceil"></select></label>
+        </div>
+    </div>
+
+    <!-- 遊戲主畫面 -->
+    <div id="game-screen">
+        <canvas id="mazeCanvas" width="768" height="440"></canvas>
+        <div id="minimap"></div>
+        <div id="toast"></div>
+
+        <div id="map-overlay" class="modal-overlay">
+            <div class="modal-card" style="max-width: none; width: auto; padding: 12px; gap: 8px;">
+                <h3>已走過的地圖</h3>
+                <div id="view-map-grid"></div>
+                <button class="retro-btn" onclick="closeMapView()">關閉 (Space / ESC)</button>
+            </div>
+        </div>
+
+        <div id="modal-overlay" class="modal-overlay">
+            <div class="modal-card">
+                <h3 id="modal-title">提示訊息</h3>
+                <p id="modal-text" style="font-size: 14px; color: #cbd5e1;">是否離開遊戲？</p>
+                <div class="btn-group" id="modal-buttons" style="justify-content: center;">
+                    <button class="retro-btn" onclick="confirmModal(true)">確定</button>
+                    <button class="retro-btn" onclick="confirmModal(false)">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最終復盤畫面 -->
+    <div id="summary-screen">
+        <h2 style="color: #fbbf24; font-size: 18px;">迷宮探索復盤</h2>
+        <p style="font-size: 13px; color: #94a3b8;">藍色：本局走過的路徑　黃色：已點亮祭壇　灰色：未點亮祭壇　紅色：怪物最後位置</p>
+        <div id="full-map-grid"></div>
+        <p style="font-size: 13px; color: #38bdf8;">按下 [Enter] / [ESC] 鍵或點擊下方按鈕返回主選單</p>
+        <button class="retro-btn" onclick="returnToMenu()">返回主選單</button>
+    </div>
+
+    <!-- 控制按鈕列 -->
+    <div class="controls-bar" id="controls-bar" style="display: none;">
+        <div class="dpad">
+            <button class="ctrl-btn pad-up" onclick="handleAction('FORWARD')"><span>⬆</span> 前進</button>
+            <button class="ctrl-btn pad-left" onclick="handleAction('LEFT')"><span>⬅</span> 左轉</button>
+            <button class="ctrl-btn pad-right" onclick="handleAction('RIGHT')"><span>➡</span> 右轉</button>
+            <button class="ctrl-btn pad-down" onclick="handleAction('BACKWARD')"><span>⬇</span> 後退</button>
+        </div>
+        <div class="side-btns">
+            <button class="ctrl-btn" onclick="openMapView()"><span>🗺</span> 地圖 (Space)</button>
+            <button class="ctrl-btn quit" onclick="handleAction('QUIT')"><span>❌</span> 放棄 (ESC)</button>
+        </div>
+    </div>
+</div>
+
+<!-- 3D 模型（單檔測試版：已把 models 資料夾的檔案內嵌進來） -->
+<script>
+/* ===== 內嵌自 models/engine3d.js ===== */
+// =====================================================================
+// 迷你 3D 引擎：用多邊形拼模型，以畫家演算法畫在 Canvas 2D 上
+//   模型座標：1 = 一格；y = 0 為地板；模型正面朝 -z
+//   以一般 <script src> 載入（不是 ES module），雙擊 HTML 用 file:// 開也能用
+//   提供全域物件 M3D；模型檔把模型登記到 M3D.MODELS
+// =====================================================================
+(function () {
+    const TAU = Math.PI * 2;
+    const hex = s => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+    const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const len = a => Math.hypot(a[0], a[1], a[2]);
+    const norm = a => mul(a, 1 / (len(a) || 1));
+
+    // 繞軸旋轉（p 為支點），回傳變換函式
+    const rotX = (a, p = [0, 0, 0]) => { const c = Math.cos(a), s = Math.sin(a); return q => { const y = q[1] - p[1], z = q[2] - p[2]; return [q[0], p[1] + y * c - z * s, p[2] + y * s + z * c]; }; };
+    const rotY = (a, p = [0, 0, 0]) => { const c = Math.cos(a), s = Math.sin(a); return q => { const x = q[0] - p[0], z = q[2] - p[2]; return [p[0] + x * c + z * s, q[1], p[2] - x * s + z * c]; }; };
+    const rotZ = (a, p = [0, 0, 0]) => { const c = Math.cos(a), s = Math.sin(a); return q => { const x = q[0] - p[0], y = q[1] - p[1]; return [p[0] + x * c - y * s, p[1] + x * s + y * c, q[2]]; }; };
+
+    // 一個面：頂點、顏色、所屬零件中心（用來判斷法向量朝外）
+    //   o.two 雙面、o.alpha 透明度、o.glow 自體發光（不受光影影響）
+    function face(pts, col, center, o = {}) {
+        return { pts, col: typeof col === 'string' ? hex(col) : col, center,
+                 two: !!o.two, alpha: o.alpha || 1, glow: !!o.glow };
+    }
+    // 對 start 之後加入的面套用變換（用來做關節旋轉）
+    function xform(M, start, fn) {
+        for (let i = start; i < M.length; i++) { M[i].pts = M[i].pts.map(fn); M[i].center = fn(M[i].center); }
+    }
+    // 方塊：[x, 底部 y, z]、[寬, 高, 深]
+    function box(M, [x, y, z], [w, h, d], col, o) {
+        const x0 = x - w / 2, x1 = x + w / 2, y1 = y + h, z0 = z - d / 2, z1 = z + d / 2;
+        const P = [[x0, y, z0], [x1, y, z0], [x1, y1, z0], [x0, y1, z0], [x0, y, z1], [x1, y, z1], [x1, y1, z1], [x0, y1, z1]];
+        const ctr = [x, y + h / 2, z];
+        for (const f of [[0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 3, 7], [1, 5, 6, 2], [3, 2, 6, 7], [4, 5, 1, 0]])
+            M.push(face(f.map(i => P[i]), col, ctr, o));
+    }
+    // 兩點之間的方柱（骨頭、腳、劍）
+    function beam(M, a, b, t, col, o) {
+        const d = norm(sub(b, a));
+        const u = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        const e1 = mul(norm(cross(d, u)), t / 2), e2 = mul(norm(cross(d, e1)), t / 2);
+        const ring = p => [add(add(p, e1), e2), sub(add(p, e1), e2), sub(sub(p, e1), e2), add(sub(p, e1), e2)];
+        const A = ring(a), B = ring(b), ctr = mul(add(a, b), 0.5);
+        for (let i = 0; i < 4; i++) M.push(face([A[i], A[(i + 1) % 4], B[(i + 1) % 4], B[i]], col, ctr, o));
+        M.push(face(A, col, ctr, o)); M.push(face(B, col, ctr, o));
+    }
+    // 球體／橢球（o.half: 只要上半球；o.capCol: 半球底面顏色）
+    function sphere(M, [cx, cy, cz], [rx, ry, rz], col, o = {}) {
+        const seg = o.seg || 10, rings = o.rings || 6, top = o.half ? rings / 2 : rings;
+        const pt = (i, j) => { const th = j / rings * Math.PI, ph = i / seg * TAU;
+            return [cx + rx * Math.sin(th) * Math.cos(ph), cy + ry * Math.cos(th), cz + rz * Math.sin(th) * Math.sin(ph)]; };
+        for (let j = 0; j < top; j++) for (let i = 0; i < seg; i++) {
+            const q = [pt(i, j), pt(i + 1, j), pt(i + 1, j + 1), pt(i, j + 1)];
+            M.push(face(j === 0 ? [q[0], q[2], q[3]] : q, col, [cx, cy, cz], o));
+        }
+        if (o.half && !o.noCap) {
+            const ring = []; for (let i = 0; i < seg; i++) ring.push(pt(i, top));
+            M.push(face(ring, o.capCol || col, [cx, cy + ry * 0.3, cz], o));
+        }
+    }
+    // 圓柱／圓錐（r1 = 0 為圓錐；h 為負時尖端朝下）
+    function frustum(M, [cx, cy, cz], r0, r1, h, col, o = {}) {
+        const seg = o.seg || 8, ctr = [cx, cy + h / 2, cz];
+        const b = i => { const a = i / seg * TAU; return [cx + Math.cos(a) * r0, cy, cz + Math.sin(a) * r0]; };
+        const t = i => { const a = i / seg * TAU; return [cx + Math.cos(a) * r1, cy + h, cz + Math.sin(a) * r1]; };
+        for (let i = 0; i < seg; i++)
+            M.push(face(r1 > 1e-4 ? [b(i), b(i + 1), t(i + 1), t(i)] : [b(i), b(i + 1), t(i)], col, ctr, o));
+        if (!o.noCap) {
+            if (r0 > 1e-4) M.push(face([...Array(seg)].map((_, i) => b(i)), col, ctr, o));
+            if (r1 > 1e-4) M.push(face([...Array(seg)].map((_, i) => t(i)), col, ctr, o));
+        }
+    }
+
+    // 光源：從玩家後上方照過來（相機座標）
+    const LIGHT = norm([-0.35, 0.75, -0.55]);
+
+    // 畫出模型
+    //   toCam(p)  模型座標 → 相機座標 [X 右, Y 上, Z 前]
+    //   proj(p)   相機座標 → 螢幕座標 [sx, sy]
+    //   fogFn(z)  距離 → 亮度 (0~1)
+    function drawFaces(ctx, M, toCam, proj, fogFn) {
+        const list = [];
+        for (const f of M) {
+            const P = f.pts.map(toCam);
+            if (P.some(p => p[2] < 0.05)) continue;
+            const cen = [0, 0, 0];
+            for (const p of P) { cen[0] += p[0]; cen[1] += p[1]; cen[2] += p[2]; }
+            cen[0] /= P.length; cen[1] /= P.length; cen[2] /= P.length;
+            let n = [0, 0, 0]; // Newell 法向量
+            for (let i = 0; i < P.length; i++) {
+                const a = P[i], b = P[(i + 1) % P.length];
+                n[0] += (a[1] - b[1]) * (a[2] + b[2]); n[1] += (a[2] - b[2]) * (a[0] + b[0]); n[2] += (a[0] - b[0]) * (a[1] + b[1]);
+            }
+            const nl = len(n); if (nl < 1e-12) continue;
+            n = mul(n, 1 / nl);
+            if (dot(n, sub(cen, toCam(f.center))) < 0) n = mul(n, -1);
+            const facing = dot(n, cen);
+            if (!f.two && facing >= 0) continue;   // 背面不畫
+            if (f.two && facing > 0) n = mul(n, -1);
+            const light = f.glow ? 1 : 0.32 + 0.68 * Math.max(0, dot(n, LIGHT));
+            list.push({ P, z: len(cen), f, light });
+        }
+        list.sort((a, b) => b.z - a.z);
+        for (const it of list) {
+            const f = it.f, fog = fogFn(it.z);
+            const k = f.glow ? Math.sqrt(fog) : it.light * fog;
+            const r = Math.min(255, f.col[0] * k) | 0, g = Math.min(255, f.col[1] * k) | 0, b = Math.min(255, f.col[2] * k) | 0;
+            ctx.fillStyle = f.alpha < 1 ? `rgba(${r},${g},${b},${f.alpha.toFixed(2)})` : `rgb(${r},${g},${b})`;
+            ctx.beginPath();
+            it.P.forEach((p, i) => { const [sx, sy] = proj(p); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+            ctx.closePath(); ctx.fill();
+            if (f.alpha >= 1) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke(); } // 蓋掉面與面之間的細縫
+        }
+    }
+    // 地上的圓形影子
+    function drawShadow(ctx, toCam, proj, r, alpha) {
+        const pts = [];
+        for (let i = 0; i < 16; i++) {
+            const a = i / 16 * TAU, p = toCam([Math.cos(a) * r, 0.004, Math.sin(a) * r]);
+            if (p[2] < 0.05) return;
+            pts.push(proj(p));
+        }
+        ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        pts.forEach(([sx, sy], i) => i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy));
+        ctx.closePath(); ctx.fill();
+    }
+
+    window.M3D = {
+        TAU, hex, add, sub, mul, dot, cross, len, norm,
+        rotX, rotY, rotZ, face, xform, box, beam, sphere, frustum,
+        drawFaces, drawShadow,
+        // 模型登記處：{ id: { name, cat, build(t, state), face, sh } }
+        //   cat：monster 怪物 / altar 祭壇 / item 寶物 / trap 機關
+        //   face：player 面向玩家 / world 固定朝向 / spin 原地旋轉
+        //   sh：影子半徑（0 = 不畫）
+        MODELS: {},
+    };
+})();
+
+</script>
+<script>
+/* ===== 內嵌自 models/monsters.js ===== */
+// =====================================================================
+// 怪物模型（10 種）— 需先載入 engine3d.js
+//   每個 build(t) 回傳面清單；t = 秒，用來做動作
+// =====================================================================
+(function () {
+    const { TAU, box, beam, sphere, frustum, face, xform, rotX, rotZ } = M3D;
+
+    function buildSlime(t) {
+        const M = [], s = Math.sin(t * 4), ry = 0.2 * (1 + 0.15 * s), rxz = 0.28 * (1 - 0.07 * s);
+        sphere(M, [0, ry, 0], [rxz, ry, rxz], '#45c043', { seg: 12, rings: 8 });
+        for (const sx of [-1, 1]) sphere(M, [sx * 0.085, ry * 1.3, -rxz * 0.93], [0.035, 0.05, 0.025], '#0d1a0d', { seg: 6, rings: 4 });
+        sphere(M, [-0.11, ry * 1.65, -rxz * 0.47], [0.05, 0.025, 0.04], '#eaffea', { seg: 6, rings: 4, glow: true });
+        return M;
+    }
+
+    function buildSkeleton(t) {
+        const M = [], B = '#e6dfcc';
+        beam(M, [-0.06, 0, 0], [-0.06, 0.32, 0], 0.045, B);
+        beam(M, [0.06, 0, 0], [0.06, 0.32, 0], 0.045, B);
+        box(M, [0, 0.3, 0], [0.2, 0.06, 0.09], B);
+        beam(M, [0, 0.34, 0], [0, 0.62, 0], 0.04, B);
+        for (let i = 0; i < 4; i++) box(M, [0, 0.4 + i * 0.05, -0.01], [0.22 - i * 0.025, 0.022, 0.13], B);
+        box(M, [0, 0.6, 0], [0.28, 0.035, 0.06], B);
+        beam(M, [-0.14, 0.6, 0], [-0.16, 0.4, -0.02], 0.035, B);
+        const st = M.length, sw = 0.45 + 0.6 * Math.sin(t * 3);   // 揮劍
+        beam(M, [0.14, 0.6, 0], [0.15, 0.4, 0], 0.035, B);
+        box(M, [0.15, 0.36, 0], [0.025, 0.06, 0.025], '#6b4a1f');
+        box(M, [0.15, 0.42, 0], [0.1, 0.02, 0.035], '#c9a227');
+        box(M, [0.15, 0.44, 0], [0.03, 0.34, 0.012], '#c3ccd5');
+        xform(M, st, rotX(sw, [0.14, 0.6, 0]));
+        sphere(M, [0, 0.72, 0], [0.085, 0.085, 0.09], B, { seg: 10, rings: 7 });
+        box(M, [0, 0.62, -0.02], [0.1, 0.045, 0.08], B);
+        for (const sx of [-1, 1]) {
+            sphere(M, [sx * 0.033, 0.73, -0.08], [0.022, 0.026, 0.012], '#111111', { seg: 6, rings: 4 });
+            sphere(M, [sx * 0.033, 0.73, -0.09], [0.008, 0.008, 0.006], '#ff3b3b', { seg: 5, rings: 3, glow: true });
+        }
+        return M;
+    }
+
+    function buildBat(t) {
+        const M = [], y = 0.42 + 0.03 * Math.sin(t * 3), C = '#4a2c58';
+        sphere(M, [0, y, 0], [0.07, 0.09, 0.065], C, { seg: 8, rings: 6 });
+        sphere(M, [0, y + 0.11, -0.01], [0.055, 0.05, 0.05], C, { seg: 8, rings: 6 });
+        for (const s of [-1, 1]) {
+            frustum(M, [s * 0.03, y + 0.14, -0.01], 0.02, 0, 0.06, C, { seg: 5 });
+            sphere(M, [s * 0.022, y + 0.12, -0.054], [0.012, 0.012, 0.008], '#ff4040', { seg: 5, rings: 3, glow: true });
+            const st = M.length;
+            const w = [[0.05, 0.05], [0.3, 0.14], [0.42, 0.04], [0.34, 0], [0.28, -0.04], [0.2, 0], [0.13, -0.05], [0.06, -0.03]]
+                .map(([x, yy]) => [s * x, y + yy, 0.01]);
+            M.push(face(w, '#3b2346', [s * 0.2, y, 0.01], { two: true }));
+            xform(M, st, rotZ(s * Math.sin(t * 12) * 0.8, [s * 0.05, y + 0.02, 0]));   // 拍翅膀
+        }
+        return M;
+    }
+
+    function buildGhost(t) {
+        const M = [], y = 0.08 + 0.03 * Math.sin(t * 2), W = '#e8eeff', A = 0.82;
+        frustum(M, [0, y, 0], 0.2, 0.16, 0.3, W, { seg: 12, alpha: A, noCap: true });
+        sphere(M, [0, y + 0.3, 0], [0.16, 0.16, 0.16], W, { seg: 12, rings: 8, half: true, noCap: true, alpha: A });
+        for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + t; frustum(M, [Math.cos(a) * 0.15, y + 0.005, Math.sin(a) * 0.15], 0.05, 0, -0.07, W, { seg: 5, alpha: A }); }
+        for (const s of [-1, 1]) {
+            sphere(M, [s * 0.06, y + 0.36, -0.14], [0.03, 0.045, 0.02], '#1b1f3a', { seg: 6, rings: 4 });
+            sphere(M, [s * 0.22, y + 0.2 + 0.03 * Math.sin(t * 3 + s), 0], [0.05, 0.04, 0.04], W, { seg: 6, rings: 4, alpha: A });
+        }
+        sphere(M, [0, y + 0.25, -0.17], [0.03, 0.04, 0.015], '#1b1f3a', { seg: 6, rings: 4 });
+        return M;
+    }
+
+    function buildEyeball(t) {
+        const M = [], y = 0.4 + 0.03 * Math.sin(t * 2);
+        for (let i = 0; i < 5; i++) {
+            const a = i / 5 * TAU + 0.3; let p = [Math.cos(a) * 0.1, y - 0.14, Math.sin(a) * 0.1];
+            for (let j = 1; j <= 4; j++) {
+                const q = [Math.cos(a) * (0.1 + j * 0.02) + Math.sin(t * 3 + i + j) * 0.025, y - 0.14 - j * 0.06, Math.sin(a) * (0.1 + j * 0.02)];
+                beam(M, p, q, 0.035 - j * 0.005, '#7a3d8f'); p = q;
+            }
+        }
+        sphere(M, [0, y, 0], [0.2, 0.2, 0.2], '#f2ece6', { seg: 12, rings: 8 });
+        const lx = Math.sin(t * 1.3) * 0.06, ly = Math.cos(t * 1.7) * 0.03;   // 眼珠轉動
+        sphere(M, [lx, y + ly, -0.19], [0.08, 0.08, 0.03], '#2e86c1', { seg: 10, rings: 6 });
+        sphere(M, [lx * 1.05, y + ly, -0.215], [0.04, 0.04, 0.012], '#050505', { seg: 8, rings: 4 });
+        sphere(M, [lx - 0.02, y + ly + 0.02, -0.225], [0.012, 0.012, 0.006], '#ffffff', { seg: 5, rings: 3, glow: true });
+        return M;
+    }
+
+    function buildMushroom(t) {
+        const M = [], b = Math.abs(Math.sin(t * 4)) * 0.03;
+        for (const s of [-1, 1]) sphere(M, [s * 0.07, 0.03, -0.02 + s * Math.sin(t * 8) * 0.02], [0.05, 0.03, 0.06], '#c8b28a', { seg: 6, rings: 4 });
+        frustum(M, [0, 0.04 + b, 0], 0.12, 0.1, 0.28, '#efe2c4', { seg: 10 });
+        for (const s of [-1, 1]) sphere(M, [s * 0.04, 0.2 + b, -0.112], [0.016, 0.024, 0.01], '#222222', { seg: 6, rings: 4 });
+        sphere(M, [0, 0.3 + b, 0], [0.28, 0.2, 0.28], '#d8322a', { seg: 12, rings: 8, half: true, capCol: '#e9d7b0' });
+        for (const [th, ph, r] of [[0.35, 1.9, 0.045], [0.8, 4.4, 0.04], [0.9, 1.0, 0.035], [0.65, 3.2, 0.03], [0.95, 5.6, 0.04], [0.2, 0.2, 0.03], [0.75, 2.4, 0.035]]) {
+            sphere(M, [0.28 * Math.sin(th) * Math.cos(ph), 0.3 + b + 0.2 * Math.cos(th), 0.28 * Math.sin(th) * Math.sin(ph)], [r, r * 0.6, r], '#ffffff', { seg: 6, rings: 4 });
+        }
+        return M;
+    }
+
+    function buildGolem(t) {
+        const M = [], S = '#7d7f86', D = '#6a6c73', step = Math.sin(t * 2.5);
+        box(M, [-0.1, 0, 0], [0.12, 0.26, 0.13], D); box(M, [0.1, 0, 0], [0.12, 0.26, 0.13], D);
+        box(M, [0, 0.25, 0], [0.42, 0.32, 0.25], S);
+        box(M, [0, 0.57, -0.02], [0.18, 0.15, 0.16], '#878991');
+        for (const s of [-1, 1]) {
+            const st = M.length;
+            box(M, [s * 0.28, 0.3, 0], [0.11, 0.28, 0.12], D);
+            box(M, [s * 0.29, 0.2, 0], [0.15, 0.11, 0.15], '#5f6168');
+            xform(M, st, rotX(s * step * 0.35 - 0.1, [s * 0.28, 0.55, 0]));
+        }
+        for (const s of [-1, 1]) box(M, [s * 0.045, 0.62, -0.105], [0.035, 0.022, 0.01], '#99ffff', { glow: true });
+        const p = 0.5 + 0.5 * Math.sin(t * 4);
+        box(M, [0, 0.4, -0.13], [0.07, 0.07, 0.01], [80 + 100 * p, 200 + 55 * p, 220 + 35 * p], { glow: true });
+        return M;
+    }
+
+    function buildSpider(t) {
+        const M = [];
+        for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
+            const up = Math.max(0, Math.sin(t * 8 + i * Math.PI / 2 + (s > 0 ? Math.PI : 0))) * 0.05;
+            const hip = [s * 0.07, 0.17, -0.15 + i * 0.07], knee = [s * 0.22, 0.3 + up, -0.2 + i * 0.11], foot = [s * 0.34, up * 0.6, -0.3 + i * 0.18];
+            beam(M, hip, knee, 0.028, '#262626'); beam(M, knee, foot, 0.022, '#262626');
+        }
+        sphere(M, [0, 0.2, 0.12], [0.17, 0.13, 0.2], '#2b2b2b', { seg: 10, rings: 7 });
+        sphere(M, [0, 0.325, 0.12], [0.05, 0.012, 0.08], '#b91c1c', { seg: 8, rings: 4 });
+        sphere(M, [0, 0.17, -0.12], [0.09, 0.08, 0.09], '#353535', { seg: 8, rings: 6 });
+        for (const [x, y, r] of [[-0.03, 0.2, 0.018], [0.03, 0.2, 0.018], [-0.012, 0.225, 0.011], [0.012, 0.225, 0.011]])
+            sphere(M, [x, y, -0.205], [r, r, r * 0.6], '#ff3030', { seg: 5, rings: 3, glow: true });
+        beam(M, [-0.025, 0.13, -0.19], [-0.03, 0.08, -0.21], 0.014, '#dddddd');
+        beam(M, [0.025, 0.13, -0.19], [0.03, 0.08, -0.21], 0.014, '#dddddd');
+        return M;
+    }
+
+    // 火焰精靈：一團會跳動的火焰
+    function buildFlame(t) {
+        const M = [], y = 0.1 + 0.03 * Math.sin(t * 3);
+        for (let i = 0; i < 7; i++) {
+            const a = i / 7 * TAU + 0.4, h = 0.26 + 0.09 * Math.sin(t * 9 + i * 1.7);
+            frustum(M, [Math.cos(a) * 0.09, y + 0.04, Math.sin(a) * 0.09], 0.07, 0, h, '#ff6a14', { seg: 5, glow: true });
+        }
+        for (let i = 0; i < 4; i++) {
+            const a = i / 4 * TAU + t, h = 0.3 + 0.08 * Math.sin(t * 11 + i * 2.3);
+            frustum(M, [Math.cos(a) * 0.04, y + 0.08, Math.sin(a) * 0.04], 0.05, 0, h, '#ffd23f', { seg: 5, glow: true });
+        }
+        sphere(M, [0, y + 0.12, 0], [0.12, 0.11, 0.12], '#ff8c1a', { seg: 10, rings: 6, glow: true });
+        for (const s of [-1, 1]) sphere(M, [s * 0.045, y + 0.16, -0.11], [0.022, 0.03, 0.012], '#3a0a00', { seg: 6, rings: 4 });
+        for (let i = 0; i < 5; i++) {   // 往上飄的火星
+            const k = (t * 0.6 + i / 5) % 1, a = i * 2.1 + t * 0.5;
+            box(M, [Math.cos(a) * 0.12, y + 0.25 + k * 0.35, Math.sin(a) * 0.12], [0.02, 0.02, 0.02], '#ffcf6b', { glow: true, alpha: Math.max(0.05, 1 - k) });
+        }
+        return M;
+    }
+
+    // 毒蛇：盤起身體，抬頭吐信
+    function buildSnake(t) {
+        const M = [], G1 = '#3f8f3a', G2 = '#2f6e2c';
+        let last = null;
+        for (let i = 0; i < 16; i++) {   // 盤繞的身體
+            const a = i * 0.75, r = 0.18 - i * 0.006;
+            const p = [Math.cos(a) * r, 0.05 + i * 0.012, Math.sin(a) * r + 0.04];
+            sphere(M, p, [0.062 - i * 0.0012, 0.05, 0.062 - i * 0.0012], i % 2 ? G1 : G2, { seg: 7, rings: 5 });
+            last = p;
+        }
+        const sway = Math.sin(t * 2) * 0.04;
+        const head = [sway, 0.46, -0.1];
+        for (let j = 1; j <= 5; j++) {   // 抬起的脖子
+            const k = j / 6;
+            const p = [last[0] + (head[0] - last[0]) * k, last[1] + (head[1] - last[1]) * Math.sin(k * Math.PI / 2), last[2] + (head[2] - last[2]) * k];
+            sphere(M, p, [0.045, 0.045, 0.045], j % 2 ? G1 : G2, { seg: 7, rings: 5 });
+        }
+        sphere(M, head, [0.065, 0.045, 0.085], '#4aa043', { seg: 8, rings: 6 });
+        for (const s of [-1, 1]) sphere(M, [head[0] + s * 0.038, head[1] + 0.02, head[2] - 0.045], [0.014, 0.014, 0.01], '#ffe14d', { seg: 5, rings: 3, glow: true });
+        if (Math.sin(t * 5) > 0.2) {   // 吐信
+            const tip = [head[0], head[1] - 0.01, head[2] - 0.17];
+            beam(M, [head[0], head[1] - 0.01, head[2] - 0.08], tip, 0.01, '#e11d48', { glow: true });
+            beam(M, tip, [tip[0] - 0.02, tip[1], tip[2] - 0.03], 0.008, '#e11d48', { glow: true });
+            beam(M, tip, [tip[0] + 0.02, tip[1], tip[2] - 0.03], 0.008, '#e11d48', { glow: true });
+        }
+        return M;
+    }
+
+    Object.assign(M3D.MODELS, {
+        slime:    { name: '史萊姆',   cat: 'monster', build: buildSlime,    face: 'player', sh: 0.28 },
+        skeleton: { name: '骷髏兵',   cat: 'monster', build: buildSkeleton, face: 'player', sh: 0.2 },
+        bat:      { name: '蝙蝠',     cat: 'monster', build: buildBat,      face: 'player', sh: 0.12 },
+        ghost:    { name: '幽靈',     cat: 'monster', build: buildGhost,    face: 'player', sh: 0.18 },
+        eyeball:  { name: '獨眼怪',   cat: 'monster', build: buildEyeball,  face: 'player', sh: 0.15 },
+        mushroom: { name: '蘑菇怪',   cat: 'monster', build: buildMushroom, face: 'player', sh: 0.26 },
+        golem:    { name: '石像魔像', cat: 'monster', build: buildGolem,    face: 'player', sh: 0.3 },
+        spider:   { name: '巨型蜘蛛', cat: 'monster', build: buildSpider,   face: 'player', sh: 0.3 },
+        flame:    { name: '火焰精靈', cat: 'monster', build: buildFlame,    face: 'player', sh: 0.15 },
+        snake:    { name: '毒蛇',     cat: 'monster', build: buildSnake,    face: 'player', sh: 0.24 },
+    });
+})();
+
+</script>
+<script>
+/* ===== 內嵌自 models/props.js ===== */
+// =====================================================================
+// 祭壇、寶物、機關模型 — 需先載入 engine3d.js
+//   祭壇 build(t, lit)：lit = true 為發光狀態
+//   寶物與機關目前遊戲還沒用到，先放著備用（預覽頁看得到）
+// =====================================================================
+(function () {
+    const { TAU, box, beam, sphere, frustum, xform, rotX, rotY } = M3D;
+
+    // ---------- 祭壇 ----------
+    function buildAltar(t, lit) {
+        const M = [], S = '#b3a68a', D = '#8f8269';   // 砂岩色，和灰色石牆區隔
+        box(M, [0, 0, 0], [0.5, 0.06, 0.5], D);
+        box(M, [0, 0.06, 0], [0.4, 0.05, 0.4], S);
+        frustum(M, [0, 0.11, 0], 0.11, 0.09, 0.24, S, { seg: 8 });
+        box(M, [0, 0.35, 0], [0.3, 0.05, 0.3], D);
+        // 台座四面的符文：點亮時發光
+        const rune = lit ? '#ffd35a' : '#4a4234';
+        for (let i = 0; i < 4; i++) {
+            const st = M.length;
+            box(M, [0, 0.07, -0.203], [0.14, 0.025, 0.006], rune, { glow: lit });
+            box(M, [0, 0.365, -0.153], [0.12, 0.02, 0.006], rune, { glow: lit });
+            xform(M, st, rotY(i * Math.PI / 2));
+        }
+        // 頂端水晶（上下兩個角錐）
+        const cy = 0.5 + (lit ? 0.03 * Math.sin(t * 2) : 0);
+        const st = M.length, col = lit ? '#8ff6ff' : '#5a5a78';
+        frustum(M, [0, cy, 0], 0.075, 0, 0.13, col, { seg: 4 });
+        frustum(M, [0, cy, 0], 0.075, 0, -0.1, col, { seg: 4 });
+        xform(M, st, rotY(lit ? t * 1.2 : 0.4));
+        if (lit) {
+            frustum(M, [0, 0.4, 0], 0.17, 0.05, 0.65, '#7df9ff', { seg: 10, alpha: 0.14, glow: true, two: true, noCap: true });
+            for (let i = 0; i < 6; i++) {
+                const k = (t * 0.4 + i / 6) % 1, a = i * 2.3 + t * 1.5;
+                box(M, [Math.cos(a) * 0.14, 0.42 + k * 0.45, Math.sin(a) * 0.14], [0.02, 0.02, 0.02], '#e0fdff', { glow: true, alpha: Math.max(0.05, 1 - k) });
+            }
+        }
+        return M;
+    }
+
+    // ---------- 寶物 ----------
+    function buildChest(open) {
+        const M = [], G = '#d4a017';
+        box(M, [0, 0, 0], [0.5, 0.24, 0.32], '#8b5a2b');
+        for (const s of [-1, 1]) box(M, [s * 0.17, 0, 0], [0.05, 0.245, 0.33], G);
+        if (open) {
+            sphere(M, [0, 0.2, 0], [0.22, 0.08, 0.13], '#f5c542', { seg: 10, rings: 6, half: true, glow: true });
+            sphere(M, [0.08, 0.27, -0.03], [0.03, 0.04, 0.03], '#e74c3c', { seg: 6, rings: 4, glow: true });
+        }
+        const st = M.length;
+        box(M, [0, 0.24, 0], [0.5, 0.1, 0.32], '#9c6631');
+        for (const s of [-1, 1]) box(M, [s * 0.17, 0.24, 0], [0.05, 0.105, 0.33], G);
+        box(M, [0, 0.2, -0.165], [0.07, 0.09, 0.02], '#f1c40f');
+        if (open) xform(M, st, rotX(1.9, [0, 0.24, 0.16]));
+        return M;
+    }
+    function buildPotion(t) {
+        const M = [], y = 0.02 + 0.02 * Math.sin(t * 2);
+        sphere(M, [0, y + 0.1, 0], [0.085, 0.075, 0.085], '#e0294a', { seg: 10, rings: 6 });
+        sphere(M, [0, y + 0.11, 0], [0.11, 0.11, 0.11], '#cfe8ff', { seg: 10, rings: 7, alpha: 0.35 });
+        frustum(M, [0, y + 0.2, 0], 0.04, 0.035, 0.07, '#cfe8ff', { seg: 8, alpha: 0.45 });
+        box(M, [0, y + 0.265, 0], [0.06, 0.045, 0.06], '#a0703a');
+        sphere(M, [-0.04, y + 0.15, -0.09], [0.015, 0.03, 0.01], '#ffffff', { seg: 5, rings: 3, glow: true, alpha: 0.8 });
+        return M;
+    }
+    function buildKey(t) {
+        const M = [], y = 0.14 + 0.02 * Math.sin(t * 2.5), G = '#f1c40f', n = 10, cx = -0.1, r = 0.055;
+        for (let i = 0; i < n; i++) {
+            const a0 = i / n * TAU, a1 = (i + 1) / n * TAU;
+            beam(M, [cx + Math.cos(a0) * r, y + Math.sin(a0) * r, 0], [cx + Math.cos(a1) * r, y + Math.sin(a1) * r, 0], 0.025, G);
+        }
+        beam(M, [cx + r, y, 0], [0.17, y, 0], 0.028, G);
+        beam(M, [0.11, y, 0], [0.11, y - 0.055, 0], 0.024, G);
+        beam(M, [0.155, y, 0], [0.155, y - 0.045, 0], 0.024, G);
+        return M;
+    }
+
+    // ---------- 機關 ----------
+    function buildSpikes(t) {
+        const M = [];
+        box(M, [0, 0, 0], [0.62, 0.035, 0.62], '#3d4048');
+        const e = Math.pow(Math.max(0, Math.sin(t * 2.2)), 0.4), h = 0.02 + 0.24 * e;
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+            box(M, [i * 0.18, 0.035, j * 0.18], [0.07, 0.004, 0.07], '#121316');
+            frustum(M, [i * 0.18, 0.035, j * 0.18], 0.032, 0, h, '#cfd6dd', { seg: 6 });
+        }
+        return M;
+    }
+    function buildTeleport(t) {
+        const M = [], P = '#a855f7';
+        for (let i = 0; i < 16; i++) { const a = i / 16 * TAU + t * 0.8; box(M, [Math.cos(a) * 0.33, 0, Math.sin(a) * 0.33], [0.05, 0.02, 0.05], P, { glow: true }); }
+        for (let i = 0; i < 10; i++) { const a = i / 10 * TAU - t * 1.2; box(M, [Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2], [0.035, 0.015, 0.035], '#e9d5ff', { glow: true }); }
+        frustum(M, [0, 0, 0], 0.32, 0.26, 0.85, P, { seg: 14, alpha: 0.16, glow: true, two: true, noCap: true });
+        for (let i = 0; i < 8; i++) {
+            const k = (t * 0.35 + i / 8) % 1, a = i * 2.4 + t;
+            box(M, [Math.cos(a) * 0.18, k * 0.8, Math.sin(a) * 0.18], [0.025, 0.025, 0.025], '#f5e8ff', { glow: true, alpha: Math.max(0.05, 1 - k) });
+        }
+        return M;
+    }
+
+    Object.assign(M3D.MODELS, {
+        altar:     { name: '祭壇',       cat: 'altar', build: buildAltar,              face: 'world', sh: 0 },
+        chest:     { name: '寶箱（關）', cat: 'item',  build: () => buildChest(false), face: 'world', sh: 0.3, zoom: 1.4 },
+        chestOpen: { name: '寶箱（開）', cat: 'item',  build: () => buildChest(true),  face: 'world', sh: 0.3, zoom: 1.4 },
+        potion:    { name: '補血藥水',   cat: 'item',  build: buildPotion,             face: 'spin',  sh: 0.1, zoom: 2.3 },
+        key:       { name: '鑰匙',       cat: 'item',  build: buildKey,                face: 'spin',  sh: 0.12, zoom: 2.3 },
+        spikes:    { name: '地刺陷阱',   cat: 'trap',  build: buildSpikes,             face: 'world', sh: 0, zoom: 1.3 },
+        teleport:  { name: '傳送陣',     cat: 'trap',  build: buildTeleport,           face: 'world', sh: 0 },
+    });
+})();
+
+</script>
+<script>
+
+    let gameState = 'MENU';
+    let mazeSize = 10;
+    let map = [];
+    let explored = [];
+    let trailMap = [];
+    
+    let player = { x: 1, y: 1, dir: 0 };
+    let startPos = { x: 1, y: 1 };
+    let goalPos = { x: 1, y: 1 };
+    let isMoving = false;
+    let modalType = null; // null / 'quit' / 'victory' / 'map'
+    const menuSizes = [10, 20, 30];
+    let menuIndex = 0;
+
+    const dx = [0, 1, 0, -1];
+    const dy = [-1, 0, 1, 0];
+
+    // ================= 材質（程式產生，無圖片檔） =================
+    const TEX_SIZE = 128;
+    const START_RGB = [230, 170, 30];
+    const GOAL_RGB = [40, 200, 90];
+    const TEX = (() => {
+        const S = TEX_SIZE;
+        function mulberry32(a) {
+            return function () {
+                a |= 0; a = a + 0x6D2B79F5 | 0;
+                let t = Math.imul(a ^ a >>> 15, 1 | a);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+        function mk() {
+            const c = document.createElement('canvas');
+            c.width = c.height = S;
+            return { c, g: c.getContext('2d') };
+        }
+        // 在 3x3 位置各畫一次，讓跨邊界的圖形能無縫重複
+        function wrap(x, y, fn) {
+            for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) fn(x + ox, y + oy);
+        }
+        function grain(g, amt, r) {
+            const d = g.getImageData(0, 0, S, S), a = d.data;
+            for (let i = 0; i < a.length; i += 4) {
+                const n = (r() - 0.5) * amt;
+                a[i] += n; a[i + 1] += n; a[i + 2] += n;
+            }
+            g.putImageData(d, 0, 0);
+        }
+        function blots(g, r, n, rmin, rmax, colFn) {
+            for (let i = 0; i < n; i++) {
+                const x = r() * S, y = r() * S, rad = rmin + r() * (rmax - rmin);
+                const [cr, cg, cb, ca] = colFn(r);
+                wrap(x, y, (px, py) => {
+                    const gr = g.createRadialGradient(px, py, 0, px, py, rad);
+                    gr.addColorStop(0, `rgba(${cr},${cg},${cb},${ca})`);
+                    gr.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+                    g.fillStyle = gr;
+                    g.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+                });
+            }
+        }
+        function cracks(g, r, n, len, color) {
+            g.strokeStyle = color; g.lineWidth = 1;
+            for (let i = 0; i < n; i++) {
+                let x = r() * S, y = r() * S;
+                g.beginPath(); g.moveTo(x, y);
+                for (let j = 0; j < len; j++) { x += (r() - 0.5) * 10; y += (r() - 0.5) * 10; g.lineTo(x, y); }
+                g.stroke();
+            }
+        }
+        function bevel(g, x, y, w, h, s, light, dark) {
+            g.fillStyle = light; g.fillRect(x, y, w, s); g.fillRect(x, y, s, h);
+            g.fillStyle = dark;  g.fillRect(x, y + h - s, w, s); g.fillRect(x + w - s, y, s, h);
+        }
+        function waveLine(g, horizontal, base, amp, n, ph) {
+            g.beginPath();
+            for (let t = 0; t <= S; t += 2) {
+                const o = base + Math.sin(t / S * Math.PI * 2 * n + ph) * amp;
+                const [x, y] = horizontal ? [t, o] : [o, t];
+                t === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+            }
+            g.stroke();
+        }
+
+        // ----- 牆壁 -----
+        function texBrick(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#3a332e'; g.fillRect(0, 0, S, S);
+            const rows = 8, cols = 4, bh = S / rows, bw = S / cols;
+            for (let row = 0; row < rows; row++) {
+                const off = (row % 2) * bw / 2;
+                const cs = [];
+                for (let i = 0; i < cols; i++) cs.push(`hsl(${8 + r() * 12},${38 + r() * 20}%,${26 + r() * 12}%)`);
+                for (let i = -1; i <= cols; i++) {
+                    const idx = ((i % cols) + cols) % cols;
+                    const x = i * bw + off, y = row * bh;
+                    g.fillStyle = cs[idx];
+                    g.fillRect(x + 1.5, y + 1.5, bw - 3, bh - 3);
+                    bevel(g, x + 1.5, y + 1.5, bw - 3, bh - 3, 1.5, 'rgba(255,225,200,.12)', 'rgba(0,0,0,.32)');
+                }
+            }
+            blots(g, r, 14, 8, 22, () => [20, 10, 5, 0.25]);
+            grain(g, 30, r);
+            return c;
+        }
+        function texStone(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#2a2c30'; g.fillRect(0, 0, S, S);
+            const rows = 4, cols = 2, bh = S / rows, bw = S / cols;
+            for (let row = 0; row < rows; row++) {
+                const off = (row % 2) * bw / 2;
+                const cs = [];
+                for (let i = 0; i < cols; i++) cs.push(`hsl(210,${5 + r() * 8}%,${32 + r() * 12}%)`);
+                for (let i = -1; i <= cols; i++) {
+                    const idx = ((i % cols) + cols) % cols;
+                    const x = i * bw + off, y = row * bh;
+                    g.fillStyle = cs[idx];
+                    g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
+                    bevel(g, x + 2, y + 2, bw - 4, bh - 4, 2, 'rgba(255,255,255,.14)', 'rgba(0,0,0,.42)');
+                }
+            }
+            blots(g, r, 10, 6, 18, () => [0, 0, 0, 0.25]);
+            blots(g, r, 6, 6, 16, () => [60, 95, 40, 0.28]);
+            cracks(g, r, 5, 6, 'rgba(0,0,0,.45)');
+            grain(g, 36, r);
+            return c;
+        }
+        function texMetal(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#1c2126'; g.fillRect(0, 0, S, S);
+            const P = S / 2;
+            for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+                const x = i * P, y = j * P;
+                g.fillStyle = `hsl(205,${8 + r() * 6}%,${30 + r() * 6}%)`;
+                g.fillRect(x + 1, y + 1, P - 2, P - 2);
+                bevel(g, x + 1, y + 1, P - 2, P - 2, 2, 'rgba(255,255,255,.12)', 'rgba(0,0,0,.45)');
+            }
+            for (let i = 0; i < 260; i++) {
+                const x = r() * S, y = (r() * S) | 0, len = 10 + r() * 40;
+                g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.08)';
+                g.fillRect(x, y, len, 1); g.fillRect(x - S, y, len, 1);
+            }
+            blots(g, r, 7, 5, 14, () => [130, 65, 25, 0.3]);
+            for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+                for (const [ox, oy] of [[7, 7], [P - 7, 7], [7, P - 7], [P - 7, P - 7]]) {
+                    const x = i * P + ox, y = j * P + oy;
+                    g.fillStyle = '#0f1215'; g.beginPath(); g.arc(x + 0.8, y + 0.8, 2.8, 0, 7); g.fill();
+                    g.fillStyle = '#8b97a2'; g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill();
+                    g.fillStyle = '#d4dce3'; g.beginPath(); g.arc(x - 0.8, y - 0.8, 0.9, 0, 7); g.fill();
+                }
+            }
+            grain(g, 12, r);
+            return c;
+        }
+        function texWoodWall(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#1a120c'; g.fillRect(0, 0, S, S);
+            const n = 4, bw = S / n;
+            for (let p = 0; p < n; p++) {
+                const x0 = p * bw;
+                g.fillStyle = `hsl(${24 + r() * 8},${38 + r() * 12}%,${20 + r() * 9}%)`;
+                g.fillRect(x0 + 1, 0, bw - 2, S);
+                g.save(); g.beginPath(); g.rect(x0 + 1, 0, bw - 2, S); g.clip();
+                for (let j = 0; j < 9; j++) {
+                    g.strokeStyle = `rgba(0,0,0,${0.12 + r() * 0.15})`; g.lineWidth = 1;
+                    waveLine(g, false, x0 + 2 + r() * (bw - 4), 1 + r() * 2.5, 1 + ((r() * 3) | 0), r() * 6.28);
+                }
+                if (r() < 0.6) {
+                    const kx = x0 + 8 + r() * (bw - 16), ky = 12 + r() * (S - 24);
+                    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(kx, ky, 3, 5, 0, 0, 7); g.fill();
+                    g.strokeStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(kx, ky, 5, 8, 0, 0, 7); g.stroke();
+                }
+                g.restore();
+                g.fillStyle = 'rgba(255,220,180,.07)'; g.fillRect(x0 + 1, 0, 1, S);
+            }
+            grain(g, 14, r);
+            return c;
+        }
+
+        // ----- 地板 -----
+        function texTile(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#121418'; g.fillRect(0, 0, S, S);
+            const P = S / 2;
+            for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+                const L = 30 + r() * 8 + ((i + j) % 2 ? 4 : 0);
+                g.fillStyle = `hsl(215,${8 + r() * 6}%,${L}%)`;
+                g.fillRect(i * P + 2, j * P + 2, P - 4, P - 4);
+                bevel(g, i * P + 2, j * P + 2, P - 4, P - 4, 2, 'rgba(255,255,255,.12)', 'rgba(0,0,0,.4)');
+            }
+            blots(g, r, 8, 6, 18, () => [0, 0, 0, 0.22]);
+            cracks(g, r, 3, 6, 'rgba(0,0,0,.4)');
+            grain(g, 22, r);
+            return c;
+        }
+        function texCobble(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#101214'; g.fillRect(0, 0, S, S);
+            const n = 6, cell = S / n;
+            for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+                const cx = (i + 0.5) * cell + (r() - 0.5) * 5, cy = (j + 0.5) * cell + (r() - 0.5) * 5;
+                const rx = cell * 0.42 + r() * 2, ry = cell * 0.36 + r() * 2, rot = r() * Math.PI;
+                const L = 26 + r() * 14, sat = 6 + r() * 8;
+                wrap(cx, cy, (x, y) => {
+                    g.save(); g.translate(x, y); g.rotate(rot);
+                    const gr = g.createRadialGradient(-rx * 0.3, -ry * 0.3, 1, 0, 0, Math.max(rx, ry));
+                    gr.addColorStop(0, `hsl(30,${sat}%,${L + 12}%)`);
+                    gr.addColorStop(1, `hsl(30,${sat}%,${L - 8}%)`);
+                    g.fillStyle = gr; g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, 7); g.fill();
+                    g.restore();
+                });
+            }
+            grain(g, 24, r);
+            return c;
+        }
+        function texWoodFloor(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#140d08'; g.fillRect(0, 0, S, S);
+            const rows = 8, bh = S / rows, len = S / 2;
+            for (let row = 0; row < rows; row++) {
+                const y = row * bh, o = (r() * S) | 0;
+                for (let k = 0; k < 2; k++) {
+                    const col = `hsl(${26 + r() * 8},${34 + r() * 12}%,${24 + r() * 10}%)`;
+                    for (const ox of [0, -S]) {
+                        g.fillStyle = col; g.fillRect(o + k * len + ox + 1, y + 1, len - 2, bh - 2);
+                    }
+                }
+                g.save(); g.beginPath(); g.rect(0, y + 1, S, bh - 2); g.clip();
+                for (let j = 0; j < 4; j++) {
+                    g.strokeStyle = `rgba(0,0,0,${0.12 + r() * 0.12})`; g.lineWidth = 1;
+                    waveLine(g, true, y + 2 + r() * (bh - 4), 0.6 + r(), 1 + ((r() * 3) | 0), r() * 6.28);
+                }
+                g.restore();
+                g.fillStyle = 'rgba(255,230,200,.08)'; g.fillRect(0, y + 1, S, 1);
+            }
+            grain(g, 14, r);
+            return c;
+        }
+        function texDirt(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#3a2d21'; g.fillRect(0, 0, S, S);
+            const cols = [[70, 55, 40, 0.4], [30, 22, 15, 0.4], [90, 72, 50, 0.25]];
+            blots(g, r, 30, 6, 20, rr => cols[(rr() * 3) | 0]);
+            for (let i = 0; i < 40; i++) {
+                const x = r() * S, y = r() * S, rad = 1 + r() * 1.6, L = 30 + r() * 20;
+                wrap(x, y, (px, py) => {
+                    g.fillStyle = `hsl(30,8%,${L}%)`; g.beginPath(); g.arc(px, py, rad, 0, 7); g.fill();
+                });
+            }
+            grain(g, 40, r);
+            return c;
+        }
+
+        // ----- 天花板 -----
+        function texBeams(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#120c08'; g.fillRect(0, 0, S, S);
+            const rows = 4, bh = S / rows;
+            for (let row = 0; row < rows; row++) {
+                const y = row * bh;
+                g.fillStyle = `hsl(25,30%,${16 + r() * 6}%)`; g.fillRect(0, y + 1, S, bh - 2);
+                g.save(); g.beginPath(); g.rect(0, y + 1, S, bh - 2); g.clip();
+                for (let j = 0; j < 5; j++) {
+                    g.strokeStyle = `rgba(0,0,0,${0.15 + r() * 0.12})`; g.lineWidth = 1;
+                    waveLine(g, true, y + 3 + r() * (bh - 6), 0.8 + r(), 1 + ((r() * 2) | 0), r() * 6.28);
+                }
+                g.restore();
+            }
+            const bx = S / 2 - 14, bw = 28;
+            g.fillStyle = 'hsl(22,35%,13%)'; g.fillRect(bx, 0, bw, S);
+            g.save(); g.beginPath(); g.rect(bx, 0, bw, S); g.clip();
+            for (let j = 0; j < 6; j++) {
+                g.strokeStyle = `rgba(0,0,0,${0.2 + r() * 0.15})`;
+                waveLine(g, false, bx + 2 + r() * (bw - 4), 1 + r(), 1 + ((r() * 2) | 0), r() * 6.28);
+            }
+            g.restore();
+            g.fillStyle = 'rgba(255,220,180,.10)'; g.fillRect(bx, 0, 2, S);
+            g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(bx + bw - 2, 0, 2, S);
+            grain(g, 14, r);
+            return c;
+        }
+        function texPlaster(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#77746d'; g.fillRect(0, 0, S, S);
+            blots(g, r, 25, 8, 26, rr => rr() < 0.5 ? [255, 255, 250, 0.12] : [0, 0, 0, 0.12]);
+            blots(g, r, 3, 14, 26, () => [110, 90, 50, 0.18]);
+            cracks(g, r, 4, 8, 'rgba(40,35,30,.5)');
+            grain(g, 20, r);
+            return c;
+        }
+        function texGrate(r) {
+            const { c, g } = mk();
+            g.fillStyle = '#2b3138'; g.fillRect(0, 0, S, S);
+            const n = 4, P = S / n;
+            for (let i = 0; i < 200; i++) {
+                const x = r() * S, y = (r() * S) | 0, len = 8 + r() * 30;
+                g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.08)';
+                g.fillRect(x, y, len, 1); g.fillRect(x - S, y, len, 1);
+            }
+            for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+                const x = i * P, y = j * P;
+                bevel(g, x, y, P, P, 1, 'rgba(255,255,255,.10)', 'rgba(0,0,0,.35)');
+                g.fillStyle = '#07090b'; g.fillRect(x + 5, y + 5, P - 10, P - 10);
+                bevel(g, x + 5, y + 5, P - 10, P - 10, 2, 'rgba(0,0,0,.6)', 'rgba(255,255,255,.14)');
+            }
+            blots(g, r, 6, 5, 12, () => [130, 65, 25, 0.28]);
+            grain(g, 12, r);
+            return c;
+        }
+
+        const DEFS = {
+            wall:  [['紅磚', texBrick], ['石塊', texStone], ['金屬板', texMetal], ['木板', texWoodWall]],
+            floor: [['石板地磚', texTile], ['鵝卵石', texCobble], ['木地板', texWoodFloor], ['泥土', texDirt]],
+            ceil:  [['木樑', texBeams], ['灰泥', texPlaster], ['金屬格柵', texGrate]],
+        };
+        const out = {};
+        let seed = 1000;
+        for (const cat in DEFS) {
+            out[cat] = DEFS[cat].map(([name, fn]) => {
+                const canvas = fn(mulberry32(seed += 97));
+                return { name, canvas, data: canvas.getContext('2d').getImageData(0, 0, S, S).data };
+            });
+        }
+        return out;
+    })();
+    // 目前使用的材質（索引），預設：石塊牆／石板地磚／灰泥天花板
+    const texChoice = { wall: 1, floor: 0, ceil: 1 };
+
+    // ================= 怪物與祭壇 =================
+    // 各尺寸可選的數量範圍，與目前選擇（預設取中間值）
+    const COUNT_RANGES = {
+        10: { monsters: [1, 3],   altars: [1, 2] },
+        20: { monsters: [5, 10],  altars: [3, 4] },
+        30: { monsters: [15, 25], altars: [5, 8] },
+    };
+    const countChoice = {
+        10: { monsters: 2,  altars: 1 },
+        20: { monsters: 8,  altars: 3 },
+        30: { monsters: 20, altars: 6 },
+    };
+    const MONSTER_TYPES = window.M3D ? Object.keys(M3D.MODELS).filter(id => M3D.MODELS[id].cat === 'monster') : [];
+    // { type, x, y, px, py, fromX, fromY, moveStart, seed }
+    //   px/py：上一格（避免來回抖動）；fromX/fromY + moveStart：平滑移動用的起點與開始時間
+    let monsters = [];
+    const MONSTER_MOVE_MS = 450;   // 每走一格的滑動時間
+    let monsterIntervalSec = 1;    // 怪物每隔幾秒走一格（選單可選 1~5 秒）
+    let altars = [];     // { x, y, lit }
+    let monsterTimer = null, animFrameId = null, lastDraw = 0, toastTimer = null;
+
+    const altarAt = (x, y) => altars.find(a => a.x === x && a.y === y);
+    const monsterAt = (x, y) => monsters.find(m => m.x === x && m.y === y);
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+        return arr;
+    }
+
+    // 隨機放置祭壇與怪物（避開起點、終點；怪物盡量離起點遠一點）
+    function placeEntities(size) {
+        const cnt = countChoice[size];
+        const open = [];
+        for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+            if (map[y][x] !== 0) continue;
+            if (x === startPos.x && y === startPos.y) continue;
+            if (x === goalPos.x && y === goalPos.y) continue;
+            open.push({ x, y });
+        }
+        shuffle(open);
+        altars = open.splice(0, Math.min(cnt.altars, open.length)).map(c => ({ x: c.x, y: c.y, lit: false }));
+        const far = open.filter(c => Math.abs(c.x - startPos.x) + Math.abs(c.y - startPos.y) >= 4);
+        const pool = far.length >= cnt.monsters ? far : open;
+        const types = shuffle(MONSTER_TYPES.slice());
+        monsters = pool.slice(0, cnt.monsters).map((c, i) => ({
+            type: types[i % types.length], x: c.x, y: c.y, px: -1, py: -1,
+            fromX: c.x, fromY: c.y, moveStart: 0, seed: i * 1.7,
+        }));
+    }
+
+    // 怪物每秒沿著通道隨機走一格：只從「有路」的方向中挑，岔路隨機選，不走回頭路（死巷才回頭）
+    //   可以經過祭壇與出口（迷宮只有一條路相通，擋住會把怪物困在死巷裡），可以和玩家同格，不和其他怪物重疊
+    function moveMonsters() {
+        if (gameState !== 'PLAYING' || modalType) return;
+        const occupied = new Set(monsters.map(m => m.y * mazeSize + m.x));
+        const now = performance.now();
+        let hit = null;
+        for (const m of monsters) {
+            const opts = [];
+            for (let d = 0; d < 4; d++) {
+                const nx = m.x + dx[d], ny = m.y + dy[d];
+                if (nx < 0 || ny < 0 || nx >= mazeSize || ny >= mazeSize || map[ny][nx] !== 0) continue;
+                if (occupied.has(ny * mazeSize + nx)) continue;
+                opts.push([nx, ny]);
+            }
+            if (!opts.length) continue;
+            const ahead = opts.filter(([x, y]) => !(x === m.px && y === m.py));   // 盡量不走回頭路
+            const [nx, ny] = (ahead.length ? ahead : opts)[Math.floor(Math.random() * (ahead.length || opts.length))];
+            occupied.delete(m.y * mazeSize + m.x);
+            occupied.add(ny * mazeSize + nx);
+            m.px = m.x; m.py = m.y;
+            m.fromX = m.x; m.fromY = m.y; m.moveStart = now;   // 平滑移動的起點
+            m.x = nx; m.y = ny;
+            if (nx === player.x && ny === player.y) hit = m;
+        }
+        if (hit) showToast(`碰到怪物：${M3D.MODELS[hit.type].name}！`, 'danger');
+    }
+
+    // 玩家走進新格子時檢查：怪物、祭壇
+    function checkPlayerCell() {
+        const m = monsterAt(player.x, player.y);
+        if (m) showToast(`碰到怪物：${M3D.MODELS[m.type].name}！`, 'danger');
+        const a = altarAt(player.x, player.y);
+        if (a) {
+            if (!a.lit) {
+                a.lit = true;
+                const lit = altars.filter(x => x.lit).length;
+                showToast(lit === altars.length
+                    ? `觸摸祭壇：祭壇發光了！全部 ${altars.length} 座都已點亮，前往出口吧！`
+                    : `觸摸祭壇：祭壇發光了！（${lit} / ${altars.length}）`, 'ok');
+                updateStatus();
+            } else {
+                showToast('這座祭壇已經發光了');
+            }
+        }
+    }
+
+    function showToast(text, kind = '') {
+        const el = document.getElementById('toast');
+        el.textContent = text;
+        el.className = 'show ' + kind;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = ''; }, 2200);
+    }
+
+    function updateStatus() {
+        const lit = altars.filter(a => a.lit).length;
+        document.getElementById('status-info').textContent =
+            `尺寸: ${mazeSize}x${mazeSize}　祭壇: ${lit} / ${altars.length}　怪物: ${monsters.length}`;
+    }
+
+    // 遊戲進行中的計時：怪物每秒移動、畫面約每秒 15 張（讓模型動起來）
+    function startLoops() {
+        stopLoops();
+        monsterTimer = setInterval(moveMonsters, monsterIntervalSec * 1000);
+        const loop = (now) => {
+            animFrameId = requestAnimationFrame(loop);
+            if (gameState !== 'PLAYING' || now - lastDraw < 66) return;
+            lastDraw = now;
+            render3DView();
+        };
+        animFrameId = requestAnimationFrame(loop);
+    }
+    function stopLoops() {
+        clearInterval(monsterTimer); monsterTimer = null;
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+    }
+
+    // 選單：依尺寸更新數量選項
+    function refreshCountSelects() {
+        const size = menuSizes[menuIndex], r = COUNT_RANGES[size];
+        for (const kind of ['monsters', 'altars']) {
+            const sel = document.getElementById('sel-' + kind);
+            sel.innerHTML = '';
+            for (let n = r[kind][0]; n <= r[kind][1]; n++) sel.add(new Option(n, n));
+            sel.value = countChoice[size][kind];
+        }
+    }
+    // 怪物移動間隔：記住上次的選擇
+    function initSpeedSelect() {
+        const sel = document.getElementById('sel-speed');
+        try {
+            const saved = +localStorage.getItem('maze-monster-interval');
+            if (saved >= 1 && saved <= 5) monsterIntervalSec = saved;
+        } catch (e) { /* 忽略 */ }
+        sel.value = monsterIntervalSec;
+        sel.addEventListener('change', () => {
+            monsterIntervalSec = +sel.value;
+            sel.blur();
+            try { localStorage.setItem('maze-monster-interval', monsterIntervalSec); } catch (e) { /* 忽略 */ }
+        });
+    }
+
+    function initCountSelects() {
+        for (const kind of ['monsters', 'altars']) {
+            const sel = document.getElementById('sel-' + kind);
+            sel.addEventListener('change', () => {
+                countChoice[menuSizes[menuIndex]][kind] = +sel.value;
+                sel.blur();
+            });
+        }
+    }
+
+    // ================= BGM 安全容錯播放 (bgm/map_01.mp3 不存在時靜默忽略) =================
+    const BGMManager = {
+        audio: null,
+        started: false,
+        available: false,
+        init(src) {
+            if (!src) return;
+            const audio = new Audio();
+            audio.loop = true;
+            audio.volume = 0.5;
+            audio.addEventListener('error', () => { this.available = false; });
+            audio.addEventListener('canplaythrough', () => {
+                this.available = true;
+                if (this.started) this.play();
+            });
+            audio.src = src;
+            this.audio = audio;
+        },
+        play() {
+            this.started = true;
+            if (this.audio && this.available && this.audio.paused) {
+                this.audio.play().catch(() => {});
+            }
+        }
+    };
+    BGMManager.init('bgm/map_01.mp3');
+    window.addEventListener('pointerdown', () => BGMManager.play(), { once: true });
+    window.addEventListener('keydown', () => BGMManager.play(), { once: true });
+
+    function startGame(size) {
+        BGMManager.play();
+        mazeSize = size;
+        generatePerfectMaze(size);
+        placeEntities(size);
+
+        player.x = startPos.x;
+        player.y = startPos.y;
+        player.dir = 0;
+        
+        explored = Array(size).fill(false).map(() => Array(size).fill(false));
+        trailMap = Array(size).fill(false).map(() => Array(size).fill(false));
+        
+        markExplored();
+        trailMap[player.y][player.x] = true;
+
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('map-overlay').style.display = 'none';
+        document.getElementById('summary-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'block';
+        document.getElementById('controls-bar').style.display = 'flex';
+        document.getElementById('toast').className = '';
+        updateStatus();
+
+        gameState = 'PLAYING';
+        modalType = null;
+        isMoving = false;
+        updateView();
+        startLoops();
+    }
+
+    // 100% 確保連通的完美迷宮生成
+    function generatePerfectMaze(size) {
+        map = Array(size).fill(1).map(() => Array(size).fill(1));
+        let startX = 1;
+        let startY = 1;
+
+        function carve(cx, cy) {
+            map[cy][cx] = 0;
+            let dirs = [{x: 0, y: -2}, {x: 2, y: 0}, {x: 0, y: 2}, {x: -2, y: 0}];
+            dirs.sort(() => Math.random() - 0.5);
+
+            for (let d of dirs) {
+                let nx = cx + d.x;
+                let ny = cy + d.y;
+                if (nx > 0 && nx < size - 1 && ny > 0 && ny < size - 1 && map[ny][nx] === 1) {
+                    map[cy + d.y / 2][cx + d.x / 2] = 0;
+                    carve(nx, ny);
+                }
+            }
+        }
+
+        carve(startX, startY);
+        startPos = { x: startX, y: startY };
+        
+        // BFS 計算各格到起點的實際步數
+        const dist = Array(size).fill(-1).map(() => Array(size).fill(-1));
+        const queue = [{ x: startX, y: startY }];
+        dist[startY][startX] = 0;
+        const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+        const openCount = (x, y) => nb.filter(([ox, oy]) => map[y + oy] && map[y + oy][x + ox] === 0).length;
+        while (queue.length) {
+            const c = queue.shift();
+            for (const [ox, oy] of nb) {
+                const nx = c.x + ox, ny = c.y + oy;
+                if (nx >= 0 && nx < size && ny >= 0 && ny < size && map[ny][nx] === 0 && dist[ny][nx] < 0) {
+                    dist[ny][nx] = dist[c.y][c.x] + 1;
+                    queue.push({ x: nx, y: ny });
+                }
+            }
+        }
+
+        // 終點：離起點最遠的「死巷」（只有一個出口的格子）
+        let maxDist = -1;
+        let bestGoal = { x: startX, y: startY };
+        for (let y = 1; y < size - 1; y++) {
+            for (let x = 1; x < size - 1; x++) {
+                if (map[y][x] === 0 && !(x === startX && y === startY) && openCount(x, y) === 1) {
+                    if (dist[y][x] > maxDist) {
+                        maxDist = dist[y][x];
+                        bestGoal = { x: x, y: y };
+                    }
+                }
+            }
+        }
+        goalPos = bestGoal;
+        map[startPos.y][startPos.x] = 0;
+        map[goalPos.y][goalPos.x] = 0;
+    }
+
+    function markExplored() {
+        // 以玩家為中心的九宮格都記為已走過
+        for (let oy = -1; oy <= 1; oy++) {
+            for (let ox = -1; ox <= 1; ox++) {
+                let nx = player.x + ox;
+                let ny = player.y + oy;
+                if (nx >= 0 && nx < mazeSize && ny >= 0 && ny < mazeSize) {
+                    explored[ny][nx] = true;
+                }
+            }
+        }
+    }
+
+    // 滑鼠點擊後取消按鈕焦點，避免 Enter / Space 又觸發該按鈕
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (btn) btn.blur();
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+
+        // 彈窗開啟時，只處理彈窗按鍵
+        if (gameState === 'PLAYING' && modalType) {
+            if (modalType === 'quit') {
+                if (e.key === 'Enter') confirmModal(true);
+                else if (e.key === 'Escape') confirmModal(false);
+                else return;
+            } else if (modalType === 'map') {
+                if (e.key === ' ' || e.key === 'Escape') closeMapView();
+                else return;
+            } else { // victory：Enter / ESC 都是確認
+                if (e.key === 'Enter' || e.key === 'Escape') closeModalToSummary();
+                else return;
+            }
+            e.preventDefault();
+            return;
+        }
+
+        if (gameState === 'MENU') {
+            if (e.key === 'ArrowLeft') { selectMenu((menuIndex + menuSizes.length - 1) % menuSizes.length); e.preventDefault(); }
+            else if (e.key === 'ArrowRight') { selectMenu((menuIndex + 1) % menuSizes.length); e.preventDefault(); }
+            else if (e.key === 'Enter') { startGame(menuSizes[menuIndex]); e.preventDefault(); }
+        } else if (gameState === 'PLAYING') {
+            if (e.key === 'ArrowLeft') { handleAction('LEFT'); e.preventDefault(); }
+            else if (e.key === 'ArrowRight') { handleAction('RIGHT'); e.preventDefault(); }
+            else if (e.key === 'ArrowUp') { handleAction('FORWARD'); e.preventDefault(); }
+            else if (e.key === 'ArrowDown') { handleAction('BACKWARD'); e.preventDefault(); }
+            else if (e.key === 'Escape') { handleAction('QUIT'); e.preventDefault(); }
+            else if (e.key === ' ') { openMapView(); e.preventDefault(); }
+        } else if (gameState === 'SUMMARY' && (e.key === 'Escape' || e.key === 'Enter')) {
+            returnToMenu();
+            e.preventDefault();
+        }
+    });
+
+    function handleAction(action) {
+        if (gameState !== 'PLAYING') return;
+        if (isMoving || modalType) return;
+
+        if (action === 'QUIT') {
+            showModal('放棄遊戲', '確定要放棄並離開目前的迷宮嗎？', true);
+            return;
+        }
+
+        let targetX = player.x;
+        let targetY = player.y;
+        let newDir = player.dir;
+
+        if (action === 'LEFT') newDir = (player.dir + 3) % 4;
+        else if (action === 'RIGHT') newDir = (player.dir + 1) % 4;
+        else if (action === 'FORWARD') {
+            targetX += dx[player.dir];
+            targetY += dy[player.dir];
+        } else if (action === 'BACKWARD') {
+            targetX -= dx[player.dir];
+            targetY -= dy[player.dir];
+        }
+
+        if (action === 'FORWARD' || action === 'BACKWARD') {
+            if (targetX < 0 || targetX >= mazeSize || targetY < 0 || targetY >= mazeSize || map[targetY][targetX] === 1) {
+                return;
+            }
+        }
+
+        const moved = action === 'FORWARD' || action === 'BACKWARD';
+        isMoving = true;
+        player.x = targetX;
+        player.y = targetY;
+        player.dir = newDir;
+
+        markExplored();
+        trailMap[player.y][player.x] = true;
+
+        if (moved) checkPlayerCell();
+        updateView();
+
+        // 出口：所有祭壇都發光才能通關
+        if (moved && player.x === goalPos.x && player.y === goalPos.y) {
+            const left = altars.filter(a => !a.lit).length;
+            if (left === 0) {
+                setTimeout(() => {
+                    showModal('恭喜通關', '所有祭壇都已點亮，你成功走出迷宮！', false, true);
+                }, 150);
+                return;
+            }
+            showToast(`出口被封印：還有 ${left} 個祭壇要觸摸`, 'danger');
+        }
+
+        setTimeout(() => {
+            isMoving = false;
+        }, 150);
+    }
+
+    // 3D 渲染器：真透視投影 + 由遠到近（畫家演算法）逐格繪製牆面
+    function render3DView() {
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 畫布像素尺寸與實際顯示尺寸同步，避免透視被拉伸變形
+        const cw = canvas.clientWidth || 768;
+        const ch = canvas.clientHeight || 440;
+        if (canvas.width !== cw || canvas.height !== ch) {
+            canvas.width = cw;
+            canvas.height = ch;
+        }
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        const F = h * 0.36;     // 焦距（決定視野）
+        const CAM_BACK = 0;     // 鏡頭位於所在格中心：自己這一格只顯示前半格
+        const NEAR = 0.05;      // 近裁切面
+        const MAX_DEPTH = 4;    // 往前最多看 4 格，第 5 格起不繪製
+        const MAX_SIDE = 4;     // 左右最多看幾格
+        const FOG_DIST = 5;     // 霧化距離（第 4 格幾乎全暗）
+
+        // 天花板與地板：逐列投射材質；起點（黃）／終點（綠）地板疊色
+        {
+            const fx = dx[player.dir], fy = dy[player.dir];
+            const rx = dx[(player.dir + 1) % 4], ry = dy[(player.dir + 1) % 4];
+            const floorD = TEX.floor[texChoice.floor].data;
+            const ceilD = TEX.ceil[texChoice.ceil].data;
+            const img = ctx.createImageData(w, h), D = img.data;
+            for (let y = 0; y < h; y++) {
+                const isF = y >= cy;
+                const Z = 0.5 * F / (isF ? (y + 0.5 - cy) : (cy - (y + 0.5)));
+                const o0 = y * w * 4;
+                if (Z > MAX_DEPTH + 0.5) { // 視距外全黑
+                    for (let x = 0; x < w; x++) D[o0 + x * 4 + 3] = 255;
+                    continue;
+                }
+                const fog = Math.max(0.08, 1 - Z / FOG_DIST) * (isF ? 0.85 : 0.6);
+                const T = isF ? floorD : ceilD;
+                const bx = player.x + fx * Z + 0.5, by = player.y + fy * Z + 0.5, step = Z / F;
+                for (let x = 0; x < w; x++) {
+                    const X = (x + 0.5 - cx) * step;
+                    const wx = bx + rx * X, wy = by + ry * X;
+                    const ix = Math.floor(wx), iy = Math.floor(wy);
+                    const ti = ((((wy - iy) * TEX_SIZE) | 0) * TEX_SIZE + (((wx - ix) * TEX_SIZE) | 0)) * 4;
+                    let r = T[ti], g = T[ti + 1], b = T[ti + 2];
+                    if (isF) {
+                        const tint = (ix === goalPos.x && iy === goalPos.y) ? GOAL_RGB
+                                   : (ix === startPos.x && iy === startPos.y) ? START_RGB : null;
+                        if (tint) {
+                            r = r * 0.45 + tint[0] * 0.55;
+                            g = g * 0.45 + tint[1] * 0.55;
+                            b = b * 0.45 + tint[2] * 0.55;
+                        }
+                    }
+                    const o = o0 + x * 4;
+                    D[o] = r * fog; D[o + 1] = g * fog; D[o + 2] = b * fog; D[o + 3] = 255;
+                }
+            }
+            ctx.putImageData(img, 0, 0);
+        }
+
+        const rdx = dx[(player.dir + 1) % 4];
+        const rdy = dy[(player.dir + 1) % 4];
+
+        // 怪物／祭壇：換算成相對玩家的 d（前方）、k（右方），依「所屬格子」分組
+        //   移動中的怪物位置是小數；分組時歸到兩格中較靠近玩家視線的那一格（較晚畫）
+        const now = performance.now(), T = now / 1000;
+        const fdx = dx[player.dir], fdy = dy[player.dir];
+        const toDK = (x, y) => [(x - player.x) * fdx + (y - player.y) * fdy, (x - player.x) * rdx + (y - player.y) * rdy];
+        const buckets = new Map();
+        const addItem = (cellD, cellK, item) => {
+            const key = cellD + ',' + cellK;
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key).push(item);
+        };
+        if (window.M3D) {
+            for (const al of altars) {
+                const [d, k] = toDK(al.x, al.y);
+                addItem(d, k, { model: 'altar', state: al.lit, d, k, seed: 0 });
+            }
+            for (const mo of monsters) {
+                const p = Math.min(1, (now - mo.moveStart) / MONSTER_MOVE_MS);
+                const e = (1 - Math.cos(Math.PI * p)) / 2;   // 慢 → 快 → 慢
+                const [d, k] = toDK(mo.fromX + (mo.x - mo.fromX) * e, mo.fromY + (mo.y - mo.fromY) * e);
+                let [cd, ck] = toDK(mo.x, mo.y);
+                if (p < 1) {
+                    const [fd, fk] = toDK(mo.fromX, mo.fromY);
+                    if (fd < cd || (fd === cd && Math.abs(fk) < Math.abs(ck))) { cd = fd; ck = fk; }
+                }
+                addItem(cd, ck, { model: mo.type, state: undefined, d, k, seed: mo.seed });
+            }
+        }
+
+        // d：前方第幾格；k：橫向偏移（右為正、左為負）；界外視為牆
+        function isWall(d, k) {
+            const tx = player.x + dx[player.dir] * d + rdx * k;
+            const ty = player.y + dy[player.dir] * d + rdy * k;
+            if (tx < 0 || tx >= mazeSize || ty < 0 || ty >= mazeSize) return true;
+            return map[ty][tx] === 1;
+        }
+
+        function project(X, Y, Z) {
+            return [cx + X * F / Z, cy - Y * F / Z];
+        }
+
+        const wallTex = TEX.wall[texChoice.wall].canvas;
+        ctx.imageSmoothingEnabled = false; // 像素風
+
+        // 以半透明黑色蓋上去，做出明暗與霧化（b = 亮度 0~1）
+        function shade(x, y, ww, hh, b) {
+            const a = 1 - b;
+            if (a > 0.005) {
+                ctx.fillStyle = `rgba(0,0,0,${a.toFixed(3)})`;
+                ctx.fillRect(x, y, ww, hh);
+            }
+        }
+
+        // 朝向玩家的正面：位於深度 Z，橫向 x0 ~ x1（畫面上是長方形，直接貼圖）
+        function frontFace(x0, x1, Z) {
+            const [sx0, top] = project(x0, 0.5, Z);
+            const [sx1, bottom] = project(x1, -0.5, Z);
+            ctx.drawImage(wallTex, sx0, top, sx1 - sx0, bottom - top);
+            shade(sx0, top, sx1 - sx0, bottom - top, Math.max(0.08, 1 - Z / FOG_DIST));
+        }
+
+        // 側面：位於橫向 X，深度 z0 ~ z1（z0 可能被近裁切面截過）
+        // 畫面上是梯形：切成 1px 寬直條，依該欄的實際深度取材質（透視正確）
+        function sideFace(X, z0, z1) {
+            const zEdge = z1 - 1; // 該格真正的前緣深度
+            const a = cx + X * F / z0, b = cx + X * F / z1;
+            const s0 = Math.max(0, Math.floor(Math.min(a, b)));
+            const s1 = Math.min(w, Math.ceil(Math.max(a, b)));
+            for (let sx = s0; sx < s1; sx++) {
+                const z = X * F / (sx + 0.5 - cx);
+                if (!(z >= z0 && z <= z1)) continue;
+                const tc = Math.min(TEX_SIZE - 1, Math.max(0, ((z - zEdge) * TEX_SIZE) | 0));
+                const top = cy - 0.5 * F / z, hh = F / z;
+                ctx.drawImage(wallTex, tc, 0, 1, TEX_SIZE, sx, top, 1, hh);
+                shade(sx, top, 1, hh, 0.65 * Math.max(0.08, 1 - z / FOG_DIST));
+            }
+        }
+
+        // 由遠到近；同一深度由外側往中間，牆與怪物／祭壇交錯畫
+        // （同一深度裡，較靠中間的牆會擋住較外側格子裡的東西，所以外側的東西要先畫）
+        for (let d = MAX_DEPTH; d >= 0; d--) {
+            const zFront = d - 0.5 + CAM_BACK;
+            const zBack = d + 0.5 + CAM_BACK;
+
+            for (let a = MAX_SIDE; a >= 0; a--) {
+                const ks = (a === 0) ? [0] : [-a, a];
+                for (const k of ks) {
+                    if (!isWall(d, k)) {
+                        const items = buckets.get(d + ',' + k);
+                        if (items) for (const it of items) drawItem(it);
+                        continue;
+                    }
+
+                    // 正面：前一格（較近的一格）是通道時才看得到
+                    if (d >= 1 && !isWall(d - 1, k)) {
+                        frontFace(k - 0.5, k + 0.5, zFront);
+                    }
+                    // 面向走道中線的側面：該側鄰格是通道時才看得到
+                    // （這就是轉角／岔路口能看穿過去的關鍵）
+                    if (k < 0 && !isWall(d, k + 1)) {
+                        sideFace(k + 0.5, Math.max(zFront, NEAR), zBack);
+                    } else if (k > 0 && !isWall(d, k - 1)) {
+                        sideFace(k - 0.5, Math.max(zFront, NEAR), zBack);
+                    }
+                }
+            }
+        }
+
+        // 怪物／祭壇的立體模型（d、k 可為小數：移動中的怪物）
+        function drawItem(it) {
+            if (it.d < 0.3) return;   // 太貼近鏡頭（玩家所在格）不畫
+            const m = M3D.MODELS[it.model];
+            const yaw = m.face === 'player' ? Math.sin(T * 0.8 + it.seed) * 0.3 : 0;
+            const rY = M3D.rotY(yaw);
+            const toCam = q => { const r = rY(q); return [it.k + r[0], -0.5 + r[1], it.d + r[2]]; };
+            const proj = p => [cx + p[0] * F / p[2], cy - p[1] * F / p[2]];
+            const fogFn = z => Math.max(0.1, 1 - z / FOG_DIST);
+            if (m.sh) M3D.drawShadow(ctx, toCam, proj, m.sh, 0.45 * fogFn(it.d));
+            M3D.drawFaces(ctx, m.build(T, it.state), toCam, proj, fogFn);
+        }
+    }
+
+    // 更新 2D 小地圖（使用三角形指標代表玩家面向）
+    function updateView() {
+        render3DView();
+
+        let minimapEl = document.getElementById('minimap');
+        minimapEl.innerHTML = '';
+
+        for (let dy_off = -3; dy_off <= 3; dy_off++) {
+            for (let dx_off = -3; dx_off <= 3; dx_off++) {
+                let cell = document.createElement('div');
+                cell.className = 'map-cell';
+
+                let mx = player.x + dx_off;
+                let my = player.y + dy_off;
+
+                if (dx_off === 0 && dy_off === 0) {
+                    // 玩家格子：使用旋轉三角形指標
+                    let arrow = document.createElement('div');
+                    arrow.className = `player-arrow dir-${player.dir}`;
+                    cell.appendChild(arrow);
+                } else if (mx >= 0 && mx < mazeSize && my >= 0 && my < mazeSize) {
+                    if (explored[my][mx]) {
+                        const al = altarAt(mx, my);
+                        if (mx === goalPos.x && my === goalPos.y) {
+                            cell.className += ' goal';
+                            cell.textContent = '終';
+                        } else if (al) {
+                            cell.className += al.lit ? ' altar lit' : ' altar';
+                            cell.textContent = '祭';
+                        } else if (map[my][mx] === 1) {
+                            cell.className += ' wall';
+                        } else {
+                            cell.className += ' floor';
+                        }
+                    }
+                }
+                minimapEl.appendChild(cell);
+            }
+        }
+    }
+
+    function showModal(title, text, isQuit, isVictory = false) {
+        modalType = isVictory ? 'victory' : 'quit';
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-text').textContent = text;
+        
+        let btnBox = document.getElementById('modal-buttons');
+        if (isVictory) {
+            btnBox.innerHTML = `<button class="retro-btn" onclick="closeModalToSummary()">查看復盤 (Enter / ESC)</button>`;
+        } else if (isQuit) {
+            btnBox.innerHTML = `
+                <button class="retro-btn" onclick="confirmModal(true)">確定 (Enter)</button>
+                <button class="retro-btn" onclick="confirmModal(false)">取消 (ESC)</button>
+            `;
+        }
+        document.getElementById('modal-overlay').style.display = 'flex';
+    }
+
+    function confirmModal(isConfirm) {
+        modalType = null;
+        document.getElementById('modal-overlay').style.display = 'none';
+        if (isConfirm) {
+            showSummaryScreen();
+        } else {
+            isMoving = false;
+        }
+    }
+
+    function closeModalToSummary() {
+        modalType = null;
+        document.getElementById('modal-overlay').style.display = 'none';
+        showSummaryScreen();
+    }
+
+    function showSummaryScreen() {
+        stopLoops();
+        gameState = 'SUMMARY';
+        document.getElementById('game-screen').style.display = 'none';
+        document.getElementById('controls-bar').style.display = 'none';
+        
+        let gridEl = document.getElementById('full-map-grid');
+        gridEl.innerHTML = '';
+        gridEl.style.gridTemplateColumns = `repeat(${mazeSize}, 14px)`;
+
+        for (let y = 0; y < mazeSize; y++) {
+            for (let x = 0; x < mazeSize; x++) {
+                let cell = document.createElement('div');
+                cell.className = 'full-cell';
+
+                if (x === startPos.x && y === startPos.y) {
+                    cell.className += ' start';
+                } else if (x === goalPos.x && y === goalPos.y) {
+                    cell.className += ' goal';
+                } else if (altarAt(x, y)) {
+                    cell.className += altarAt(x, y).lit ? ' altar lit' : ' altar';
+                } else if (monsterAt(x, y)) {
+                    cell.className += ' monster';
+                } else if (trailMap[y][x]) {
+                    cell.className += ' trail';
+                } else if (map[y][x] === 1) {
+                    cell.className += ' wall';
+                } else {
+                    cell.className += ' floor';
+                }
+                gridEl.appendChild(cell);
+            }
+        }
+
+        document.getElementById('summary-screen').style.display = 'flex';
+    }
+
+    function selectMenu(i) {
+        if (i !== menuIndex || !document.getElementById('sel-monsters').options.length) {
+            menuIndex = i;
+            refreshCountSelects();
+        }
+        document.querySelectorAll('.menu-btn').forEach((b, idx) => b.classList.toggle('selected', idx === menuIndex));
+    }
+
+    function openMapView() {
+        if (gameState !== 'PLAYING' || modalType || isMoving) return;
+        modalType = 'map';
+
+        const gridEl = document.getElementById('view-map-grid');
+        const cell = Math.max(6, Math.min(18, Math.floor((290 - mazeSize) / mazeSize)));
+        gridEl.style.gridTemplateColumns = `repeat(${mazeSize}, ${cell}px)`;
+        gridEl.style.gridAutoRows = `${cell}px`;
+        gridEl.innerHTML = '';
+
+        for (let y = 0; y < mazeSize; y++) {
+            for (let x = 0; x < mazeSize; x++) {
+                const c = document.createElement('div');
+                c.className = 'view-cell';
+                if (explored[y][x]) {
+                    if (x === player.x && y === player.y) {
+                        c.className += ' player';
+                        c.style.fontSize = Math.max(6, cell - 2) + 'px';
+                        c.textContent = ['▲', '▶', '▼', '◀'][player.dir];
+                    } else if (x === goalPos.x && y === goalPos.y) c.className += ' goal';
+                    else if (x === startPos.x && y === startPos.y) c.className += ' start';
+                    else if (altarAt(x, y)) c.className += altarAt(x, y).lit ? ' altar lit' : ' altar';
+                    else if (map[y][x] === 1) c.className += ' wall';
+                    else if (trailMap[y][x]) c.className += ' trail';
+                    else c.className += ' floor';
+                }
+                gridEl.appendChild(c);
+            }
+        }
+        document.getElementById('map-overlay').style.display = 'flex';
+    }
+
+    function closeMapView() {
+        modalType = null;
+        document.getElementById('map-overlay').style.display = 'none';
+    }
+
+    function returnToMenu() {
+        gameState = 'MENU';
+        document.getElementById('summary-screen').style.display = 'none';
+        document.getElementById('menu-screen').style.display = 'flex';
+        document.getElementById('status-info').textContent = '請選擇大小';
+        selectMenu(menuIndex);
+    }
+
+    // 材質選單：填入選項，並記住上次的選擇（瀏覽器不允許儲存時就用預設值）
+    function initTextureSelects() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('maze-textures') || 'null');
+            if (saved) for (const cat in texChoice) {
+                if (Number.isInteger(saved[cat]) && TEX[cat][saved[cat]]) texChoice[cat] = saved[cat];
+            }
+        } catch (e) { /* 忽略 */ }
+
+        for (const cat in texChoice) {
+            const sel = document.getElementById('sel-' + cat);
+            TEX[cat].forEach((t, i) => sel.add(new Option(t.name, i)));
+            sel.value = texChoice[cat];
+            sel.addEventListener('change', () => {
+                texChoice[cat] = +sel.value;
+                sel.blur(); // 讓 ← → / Enter 回到選單尺寸操作
+                try { localStorage.setItem('maze-textures', JSON.stringify(texChoice)); } catch (e) { /* 忽略 */ }
+            });
+        }
+    }
+
+    initTextureSelects();
+    initCountSelects();
+    initSpeedSelect();
+    selectMenu(0);
+</script>
+</body>
+</html>
