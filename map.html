@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>2D RPG 地圖行走測試</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-text-size-adjust: none;
+      text-size-adjust: none;
+      user-select: none;
+    }
+    body {
+      background-color: #11161d;
+      color: #f0f4f8;
+      font-family: "Microsoft JhengHei", system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #game-wrapper {
+      position: relative;
+      width: 960px;
+      height: 624px;
+      max-width: 100vw;
+      max-height: 100vh;
+      border: 3px solid #3b4859;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+    #hud-info {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: right;
+      pointer-events: none;
+    }
+    /* Enter 彈出隊伍狀態視窗 */
+    #status-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 15, 25, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+    }
+    #status-modal.active {
+      display: flex;
+    }
+    .status-window {
+      width: 620px;
+      max-width: 92%;
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+      border: 2px solid #60a5fa;
+      border-radius: 10px;
+      padding: 20px 24px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+    }
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 10px;
+      margin-bottom: 16px;
+    }
+    .status-header h2 {
+      font-size: 20px;
+      color: #93c5fd;
+      letter-spacing: 1px;
+    }
+    .status-header span {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .actor-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .actor-card {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .actor-card img {
+      width: 96px;
+      height: 96px;
+      border-radius: 6px;
+      border: 2px solid #94a3b8;
+      object-fit: cover;
+      background: #0f172a;
+      image-rendering: pixelated;
+    }
+    .actor-details {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px 16px;
+      font-size: 15px;
+    }
+    .actor-name-row {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .actor-name {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .actor-role {
+      font-size: 13px;
+      color: #cbd5e1;
+      background: #334155;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .stat-label {
+      color: #94a3b8;
+    }
+    .stat-val {
+      font-weight: bold;
+      color: #f8fafc;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-wrapper">
+    <canvas id="gameCanvas" width="960" height="624"></canvas>
+
+    <div id="hud-info">
+      <div id="map-title">地圖載入中...</div>
+      <div id="coord-display">座標: (0, 0)</div>
+      <div style="color:#94a3b8; font-size:12px;">方向鍵: 移動 ｜ Enter: 狀態</div>
+    </div>
+
+    <!-- 狀態彈出視窗 (帶入男女主角臉圖) -->
+    <div id="status-modal">
+      <div class="status-window">
+        <div class="status-header">
+          <h2>隊伍狀態</h2>
+          <span>按 ESC 鍵返回地圖</span>
+        </div>
+        <div class="actor-list">
+          <div class="actor-card">
+            <img src="img/faces/face_01.png" alt="男主角" />
+            <div class="actor-details">
+              <div class="actor-name-row">
+                <span class="actor-name" style="color:#60a5fa;">男主角</span>
+                <span class="actor-role">Lv.1 領隊 / 劍士</span>
+              </div>
+              <div><span class="stat-label">HP：</span><span class="stat-val" style="color:#4ade80;">120 / 120</span></div>
+              <div><span class="stat-label">MP：</span><span class="stat-val" style="color:#38bdf8;">45 / 45</span></div>
+              <div><span class="stat-label">攻擊：</span><span class="stat-val">18</span></div>
+              <div><span class="stat-label">防禦：</span><span class="stat-val">14</span></div>
+            </div>
+          </div>
+
+          <div class="actor-card">
+            <img src="img/faces/face_02.png" alt="女主角" />
+            <div class="actor-details">
+              <div class="actor-name-row">
+                <span class="actor-name" style="color:#f472b6;">女主角</span>
+                <span class="actor-role">Lv.1 同行 / 魔導士</span>
+              </div>
+              <div><span class="stat-label">HP：</span><span class="stat-val" style="color:#4ade80;">95 / 95</span></div>
+              <div><span class="stat-label">MP：</span><span class="stat-val" style="color:#38bdf8;">80 / 80</span></div>
+              <div><span class="stat-label">攻擊：</span><span class="stat-val">12</span></div>
+              <div><span class="stat-label">防禦：</span><span class="stat-val">11</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="data/map/map_01.js"></script>
+  <script>
+    (function () {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      const mapData = window.MAP_DATA;
+      const TILE_SIZE = mapData.tileSize || 48;
+      const VIEW_W = canvas.width;
+      const VIEW_H = canvas.height;
+
+      document.getElementById('map-title').textContent = mapData.name;
+
+      // BGM 安全容錯播放模組 (bgm/map_01.mp3 不存在時靜默忽略、不報錯)
+      const BGMManager = {
+        audio: null,
+        started: false,
+        available: false,
+        init(src) {
+          if (!src) return;
+          const audio = new Audio();
+          audio.loop = true;
+          audio.volume = 0.5;
+          audio.addEventListener('error', () => {
+            this.available = false;
+          });
+          audio.addEventListener('canplaythrough', () => {
+            this.available = true;
+            if (this.started) this.play();
+          });
+          audio.src = src;
+          this.audio = audio;
+        },
+        play() {
+          this.started = true;
+          if (this.audio && this.available && this.audio.paused) {
+            this.audio.play().catch(() => {});
+          }
+        }
+      };
+      BGMManager.init(mapData.bgm);
+
+      const assets = {
+        mapSheet: new Image(),
+        actor01: new Image(),
+        actor02: new Image()
+      };
+      assets.mapSheet.src = 'img/map/map_01.png';
+      assets.actor01.src = 'img/actor/actor_01.png';
+      assets.actor02.src = 'img/actor/actor_02.png';
+
+      function createCharacter(x, y, dir, spriteKey) {
+        return {
+          tileX: x,
+          tileY: y,
+          pixelX: x * TILE_SIZE,
+          pixelY: y * TILE_SIZE,
+          targetX: x,
+          targetY: y,
+          dir: dir,
+          moving: false,
+          animFrame: 1,
+          animStep: 0,
+          spriteKey: spriteKey
+        };
+      }
+
+      const leader = createCharacter(mapData.spawn.x, mapData.spawn.y, 0, 'actor01');
+      const followerStartY = Math.max(1, mapData.spawn.y - 1);
+      const follower = createCharacter(mapData.spawn.x, followerStartY, 0, 'actor02');
+
+      const MOVE_SPEED = 4;
+      const keysPressed = {};
+      const statusModal = document.getElementById('status-modal');
+      let isStatusOpen = false;
+
+      function setStatusOpen(open) {
+        isStatusOpen = open;
+        if (open) {
+          statusModal.classList.add('active');
+          // 清空方向鍵狀態避免關閉後自動暴衝
+          Object.keys(keysPressed).forEach((k) => { keysPressed[k] = false; });
+        } else {
+          statusModal.classList.remove('active');
+        }
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          BGMManager.play();
+          if (!isStatusOpen) setStatusOpen(true);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (isStatusOpen) setStatusOpen(false);
+          return;
+        }
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          if (!isStatusOpen) {
+            keysPressed[e.key] = true;
+            BGMManager.play();
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        keysPressed[e.key] = false;
+      });
+
+      function canPass(tx, ty) {
+        if (tx < 0 || ty < 0 || tx >= mapData.width || ty >= mapData.height) return false;
+        const g1 = mapData.layers.ground1[ty][tx];
+        const o1 = mapData.layers.object1[ty][tx];
+        return mapData.passableTiles.has(g1) && mapData.passableTiles.has(o1);
+      }
+
+      function updateCharacterMove(char) {
+        if (!char.moving) return;
+
+        const destPixelX = char.targetX * TILE_SIZE;
+        const destPixelY = char.targetY * TILE_SIZE;
+
+        if (char.pixelX < destPixelX) char.pixelX = Math.min(destPixelX, char.pixelX + MOVE_SPEED);
+        if (char.pixelX > destPixelX) char.pixelX = Math.max(destPixelX, char.pixelX - MOVE_SPEED);
+        if (char.pixelY < destPixelY) char.pixelY = Math.min(destPixelY, char.pixelY + MOVE_SPEED);
+        if (char.pixelY > destPixelY) char.pixelY = Math.max(destPixelY, char.pixelY - MOVE_SPEED);
+
+        char.animStep++;
+        if (char.animStep % 4 === 0) {
+          const cycle = [0, 1, 2, 1];
+          char.animFrame = cycle[Math.floor(char.animStep / 4) % cycle.length];
+        }
+
+        if (char.pixelX === destPixelX && char.pixelY === destPixelY) {
+          char.tileX = char.targetX;
+          char.tileY = char.targetY;
+          char.moving = false;
+          char.animFrame = 1;
+        }
+      }
+
+      function handleInputAndFollow() {
+        if (isStatusOpen || leader.moving) return;
+
+        let dx = 0;
+        let dy = 0;
+        let newDir = leader.dir;
+
+        if (keysPressed['ArrowDown']) { dy = 1; newDir = 0; }
+        else if (keysPressed['ArrowLeft']) { dx = -1; newDir = 1; }
+        else if (keysPressed['ArrowRight']) { dx = 1; newDir = 2; }
+        else if (keysPressed['ArrowUp']) { dy = -1; newDir = 3; }
+        else return;
+
+        leader.dir = newDir;
+        const nextX = leader.tileX + dx;
+        const nextY = leader.tileY + dy;
+
+        if (canPass(nextX, nextY)) {
+          const prevX = leader.tileX;
+          const prevY = leader.tileY;
+
+          leader.targetX = nextX;
+          leader.targetY = nextY;
+          leader.moving = true;
+
+          if (follower.tileX !== prevX || follower.tileY !== prevY) {
+            const fdx = prevX - follower.tileX;
+            const fdy = prevY - follower.tileY;
+            if (fdy > 0) follower.dir = 0;
+            else if (fdx < 0) follower.dir = 1;
+            else if (fdx > 0) follower.dir = 2;
+            else if (fdy < 0) follower.dir = 3;
+
+            follower.targetX = prevX;
+            follower.targetY = prevY;
+            follower.moving = true;
+          }
+        }
+      }
+
+      function drawTile(tileId, screenX, screenY) {
+        if (tileId < 0 || !assets.mapSheet.complete || assets.mapSheet.naturalWidth === 0) return;
+        const cols = 8;
+        const sx = (tileId % cols) * TILE_SIZE;
+        const sy = Math.floor(tileId / cols) * TILE_SIZE;
+        ctx.drawImage(
+          assets.mapSheet,
+          sx, sy, TILE_SIZE, TILE_SIZE,
+          Math.round(screenX), Math.round(screenY), TILE_SIZE, TILE_SIZE
+        );
+      }
+
+      function drawCharacter(char, camX, camY) {
+        const img = assets[char.spriteKey];
+        const screenX = char.pixelX - camX;
+        const screenY = char.pixelY - camY;
+
+        if (img && img.complete && img.naturalWidth > 0) {
+          const sx = char.animFrame * TILE_SIZE;
+          const sy = char.dir * TILE_SIZE;
+          ctx.drawImage(
+            img,
+            sx, sy, TILE_SIZE, TILE_SIZE,
+            Math.round(screenX), Math.round(screenY), TILE_SIZE, TILE_SIZE
+          );
+        }
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+
+        const maxCamX = mapData.width * TILE_SIZE - VIEW_W;
+        const maxCamY = mapData.height * TILE_SIZE - VIEW_H;
+        const camX = Math.max(0, Math.min(maxCamX, leader.pixelX + TILE_SIZE / 2 - VIEW_W / 2));
+        const camY = Math.max(0, Math.min(maxCamY, leader.pixelY + TILE_SIZE / 2 - VIEW_H / 2));
+
+        const startCol = Math.max(0, Math.floor(camX / TILE_SIZE));
+        const endCol = Math.min(mapData.width - 1, Math.ceil((camX + VIEW_W) / TILE_SIZE));
+        const startRow = Math.max(0, Math.floor(camY / TILE_SIZE));
+        const endRow = Math.min(mapData.height - 1, Math.ceil((camY + VIEW_H) / TILE_SIZE));
+
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            const sx = c * TILE_SIZE - camX;
+            const sy = r * TILE_SIZE - camY;
+            drawTile(mapData.layers.ground1[r][c], sx, sy);
+            drawTile(mapData.layers.object1[r][c], sx, sy);
+          }
+        }
+
+        const chars = [leader, follower].sort((a, b) => a.pixelY - b.pixelY);
+        chars.forEach((ch) => drawCharacter(ch, camX, camY));
+
+        document.getElementById('coord-display').textContent =
+          `座標: (${leader.tileX}, ${leader.tileY}) / 100x100`;
+      }
+
+      function gameLoop() {
+        handleInputAndFollow();
+        updateCharacterMove(leader);
+        updateCharacterMove(follower);
+        render();
+        requestAnimationFrame(gameLoop);
+      }
+
+      gameLoop();
+    })();
+  </script>
+</body>
+</html>
